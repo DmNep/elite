@@ -25,6 +25,7 @@ $script:M = $null
 $script:Buf = $null
 $script:ViewTmp = $null
 $script:StM = $null
+$script:BoltM = $null
 $script:Market = $null
 $script:NoSpawn = $false
 $script:KeyPrev = @{}
@@ -125,67 +126,223 @@ $script:Goods = @(
     @{ N = 'Alien Items';  B = 27;  K = 0;  T = 0; Il = $false }
 )
 
-# Local ship space: +Z forward, +Y up, +X right. Units are metres.
-$script:MeshViper = @{
+# Wireframes follow the classic Elite blueprints: +X right, +Y up, +Z nose.
+# The Coriolis is scaled by 3.5 so the docking face sits 560 m out. The slot is drawn on its own.
+# A Thargon keeps the canister edge list, the way the cassette blueprint does.
+$script:MeshSide = @{
     V = [double[]]@(
-        0, 0, 48,  -34, 7, -26,  34, 7, -26,  -34, -8, -26,  34, -8, -26,  0, 15, -6,  0, -4, 16
-    )
-    E = [int[]]@(0,1, 0,2, 0,5, 0,6, 1,2, 1,3, 2,4, 3,4, 1,5, 2,5, 3,6, 4,6, 5,3, 5,4)
-}
-$script:MeshTrader = @{
-    V = [double[]]@(
-        0, 0, 36,  -28, 14, 8,  28, 14, 8,  -28, -14, 8,  28, -14, 8,
-        -28, 14, -32,  28, 14, -32,  -28, -14, -32,  28, -14, -32
+        -32, 0, 36, 32, 0, 36, 64, 0, -28,
+        -64, 0, -28, 0, 16, -28, 0, -16, -28,
+        -12, 6, -28, 12, 6, -28, 12, -6, -28,
+        -12, -6, -28
     )
     E = [int[]]@(
-        0,1, 0,2, 0,3, 0,4, 1,2, 3,4, 1,3, 2,4,
-        1,5, 2,6, 3,7, 4,8, 5,6, 7,8, 5,7, 6,8
+        0, 1, 1, 2, 1, 4, 0, 4, 0, 3, 3, 4, 2, 4, 3, 5,
+        2, 5, 1, 5, 0, 5, 6, 7, 7, 8, 6, 9, 8, 9
+    )
+}
+$script:MeshViper = @{
+    V = [double[]]@(
+        0, 0, 72, 0, 16, 24, 0, -16, 24,
+        48, 0, -24, -48, 0, -24, 24, -16, -24,
+        -24, -16, -24, 24, 16, -24, -24, 16, -24,
+        -32, 0, -24, 32, 0, -24, 8, 8, -24,
+        -8, 8, -24, -8, -8, -24, 8, -8, -24
+    )
+    E = [int[]]@(
+        0, 3, 0, 1, 0, 2, 0, 4, 1, 7, 1, 8, 2, 5, 2, 6,
+        7, 8, 5, 6, 4, 8, 4, 6, 3, 7, 3, 5, 9, 12, 9, 13,
+        10, 11, 10, 14, 11, 14, 12, 13
+    )
+}
+$script:MeshCobra = @{
+    V = [double[]]@(
+        32, 0, 76, -32, 0, 76, 0, 26, 24,
+        -120, -3, -8, 120, -3, -8, -88, 16, -40,
+        88, 16, -40, 128, -8, -40, -128, -8, -40,
+        0, 26, -40, -32, -24, -40, 32, -24, -40,
+        -36, 8, -40, -8, 12, -40, 8, 12, -40,
+        36, 8, -40, 36, -12, -40, 8, -16, -40,
+        -8, -16, -40, -36, -12, -40, 0, 0, 76,
+        0, 0, 90, -80, -6, -40, -80, 6, -40,
+        -88, 0, -40, 80, 6, -40, 88, 0, -40,
+        80, -6, -40
+    )
+    E = [int[]]@(
+        0, 1, 0, 4, 1, 3, 3, 8, 4, 7, 6, 7, 6, 9, 5, 9,
+        5, 8, 2, 5, 2, 6, 3, 5, 4, 6, 1, 2, 0, 2, 8, 10,
+        10, 11, 7, 11, 1, 10, 0, 11, 1, 5, 0, 6, 20, 21, 12, 13,
+        18, 19, 14, 15, 16, 17, 15, 16, 14, 17, 13, 18, 12, 19, 2, 9,
+        22, 24, 23, 24, 22, 23, 25, 26, 26, 27, 25, 27
+    )
+}
+$script:MeshAdder = @{
+    V = [double[]]@(
+        -18, 0, 40, 18, 0, 40, 30, 0, -24,
+        30, 0, -40, 18, -7, -40, -18, -7, -40,
+        -30, 0, -40, -30, 0, -24, -18, 7, -40,
+        18, 7, -40, -18, 7, 13, 18, 7, 13,
+        -18, -7, 13, 18, -7, 13, -11, 3, 29,
+        11, 3, 29, 11, 4, 24, -11, 4, 24
+    )
+    E = [int[]]@(
+        0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 0,
+        3, 9, 9, 8, 8, 6, 0, 10, 7, 10, 1, 11, 2, 11, 0, 12,
+        7, 12, 1, 13, 2, 13, 10, 11, 12, 13, 8, 10, 9, 11, 5, 12,
+        4, 13, 14, 15, 15, 16, 16, 17, 17, 14
+    )
+}
+$script:MeshKrait = @{
+    V = [double[]]@(
+        0, 0, 96, 0, 18, -48, 0, -18, -48,
+        90, 0, -3, -90, 0, -3, 90, 0, 87,
+        -90, 0, 87, 0, 5, 53, 0, 7, 38,
+        -18, 7, 19, 18, 7, 19, 18, 11, -39,
+        18, -11, -39, 36, 0, -30, -18, 11, -39,
+        -18, -11, -39, -36, 0, -30
+    )
+    E = [int[]]@(
+        0, 1, 0, 2, 0, 3, 0, 4, 1, 4, 4, 2, 2, 3, 3, 1,
+        3, 5, 4, 6, 1, 2, 7, 10, 8, 10, 7, 9, 8, 9, 11, 13,
+        13, 12, 12, 11, 14, 15, 15, 16, 16, 14
+    )
+}
+$script:MeshAsp = @{
+    V = [double[]]@(
+        0, -18, 0, 0, -9, -45, 43, 0, -45,
+        69, -3, 0, 43, -14, 28, -43, 0, -45,
+        -69, -3, 0, -43, -14, 28, 26, -7, 73,
+        -26, -7, 73, 43, 14, 28, -43, 14, 28,
+        0, 9, -45, -17, 0, -45, 17, 0, -45,
+        0, -4, -45, 0, 4, -45, 0, -7, 73,
+        0, -7, 83
+    )
+    E = [int[]]@(
+        0, 1, 0, 4, 0, 7, 1, 2, 2, 3, 3, 8, 8, 9, 6, 9,
+        5, 6, 1, 5, 3, 4, 4, 8, 6, 7, 7, 9, 2, 12, 5, 12,
+        10, 12, 11, 12, 10, 11, 6, 11, 9, 11, 3, 10, 8, 10, 13, 15,
+        15, 14, 14, 16, 16, 13, 18, 17
+    )
+}
+$script:MeshFdl = @{
+    V = [double[]]@(
+        0, -14, 108, -40, -14, -4, -12, -14, -52,
+        12, -14, -52, 40, -14, -4, -40, 14, -4,
+        -12, 2, -52, 12, 2, -52, 40, 14, -4,
+        0, 18, -20, -3, -11, 97, -26, 8, 18,
+        -16, 14, -4, 3, -11, 97, 26, 8, 18,
+        16, 14, -4, 0, -14, -20, -14, -14, 44,
+        14, -14, 44
+    )
+    E = [int[]]@(
+        0, 1, 1, 2, 2, 3, 3, 4, 0, 4, 0, 5, 5, 6, 6, 7,
+        7, 8, 0, 8, 5, 9, 6, 9, 7, 9, 8, 9, 1, 5, 2, 6,
+        3, 7, 4, 8, 10, 11, 11, 12, 10, 12, 13, 14, 14, 15, 13, 15,
+        16, 17, 16, 18, 17, 18
     )
 }
 $script:MeshPython = @{
     V = [double[]]@(
-        0, 0, 78,  -22, 12, 24,  22, 12, 24,  -22, -12, 24,  22, -12, 24,
-        -46, 10, -58,  46, 10, -58,  -46, -10, -58,  46, -10, -58,  0, 22, -10
+        0, 0, 224, 0, 48, 48, 96, 0, -16,
+        -96, 0, -16, 0, 48, -32, 0, 24, -112,
+        -48, 0, -112, 48, 0, -112, 0, -48, 48,
+        0, -48, -32, 0, -24, -112
     )
     E = [int[]]@(
-        0,1, 0,2, 0,3, 0,4, 0,9, 1,2, 3,4, 1,3, 2,4,
-        1,5, 2,6, 3,7, 4,8, 5,6, 7,8, 5,7, 6,8, 9,5, 9,6, 5,8, 6,7
+        0, 8, 0, 3, 0, 2, 0, 1, 2, 4, 1, 2, 2, 8, 1, 3,
+        3, 8, 2, 9, 3, 4, 3, 9, 3, 5, 3, 10, 2, 5, 2, 10,
+        2, 7, 3, 6, 5, 6, 5, 7, 7, 10, 6, 10, 4, 5, 9, 10,
+        1, 4, 8, 9
     )
 }
-$script:MeshAlien = @{
+$script:MeshThargoid = @{
     V = [double[]]@(
-        0, 0, 70,  0, 0, -70,  0, 48, 0,  0, -48, 0,  48, 0, 0,  -48, 0, 0
+        32, -48, 48, 32, -68, 0, 32, -48, -48,
+        32, 0, -68, 32, 48, -48, 32, 68, 0,
+        32, 48, 48, 32, 0, 68, -24, -116, 116,
+        -24, -164, 0, -24, -116, -116, -24, 0, -164,
+        -24, 116, -116, -24, 164, 0, -24, 116, 116,
+        -24, 0, 164, -24, 64, 80, -24, 64, -80,
+        -24, -64, -80, -24, -64, 80
     )
     E = [int[]]@(
-        0,2, 0,3, 0,4, 0,5, 1,2, 1,3, 1,4, 1,5, 2,4, 4,3, 3,5, 5,2
+        0, 7, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7,
+        0, 8, 1, 9, 2, 10, 3, 11, 4, 12, 5, 13, 6, 14, 7, 15,
+        8, 15, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13, 14, 14, 15,
+        16, 17, 18, 19
+    )
+}
+$script:MeshThargon = @{
+    V = [double[]]@(
+        -9, 0, 40, -9, -38, 12, -9, -24, -32,
+        -9, 24, -32, -9, 38, 12, 9, 0, -8,
+        9, -10, -15, 9, -6, -26, 9, 6, -26,
+        9, 10, -15
+    )
+    E = [int[]]@(
+        0, 1, 1, 2, 2, 3, 3, 4, 0, 4, 0, 5, 1, 6, 2, 7,
+        3, 8, 4, 9, 5, 6, 6, 7, 7, 8, 8, 9, 9, 5
+    )
+}
+$script:MeshRock = @{
+    V = [double[]]@(
+        0, 80, 0, -80, -10, 0, 0, -80, 0,
+        70, -40, 0, 60, 50, 0, 50, 0, 60,
+        -40, 0, 70, 0, 30, -75, 0, -50, -60
+    )
+    E = [int[]]@(
+        0, 1, 0, 4, 3, 4, 2, 3, 1, 2, 1, 6, 2, 6, 2, 5,
+        5, 6, 0, 5, 3, 5, 0, 6, 4, 5, 1, 8, 1, 7, 0, 7,
+        4, 7, 3, 7, 3, 8, 2, 8, 7, 8
+    )
+}
+$script:MeshCan = @{
+    V = [double[]]@(
+        24, 16, 0, 24, 5, 15, 24, -13, 9,
+        24, -13, -9, 24, 5, -15, -24, 16, 0,
+        -24, 5, 15, -24, -13, 9, -24, -13, -9,
+        -24, 5, -15
+    )
+    E = [int[]]@(
+        0, 1, 1, 2, 2, 3, 3, 4, 0, 4, 0, 5, 1, 6, 2, 7,
+        3, 8, 4, 9, 5, 6, 6, 7, 7, 8, 8, 9, 9, 5
+    )
+}
+$script:MeshMissile = @{
+    V = [double[]]@(
+        0, 0, 68, 8, -8, 36, 8, 8, 36,
+        -8, 8, 36, -8, -8, 36, 8, 8, -44,
+        8, -8, -44, -8, -8, -44, -8, 8, -44,
+        12, 12, -44, 12, -12, -44, -12, -12, -44,
+        -12, 12, -44, -8, 8, -12, -8, -8, -12,
+        8, 8, -12, 8, -8, -12
+    )
+    E = [int[]]@(
+        0, 1, 0, 2, 0, 3, 0, 4, 1, 2, 1, 4, 3, 4, 2, 3,
+        2, 5, 1, 6, 4, 7, 3, 8, 7, 8, 5, 8, 5, 6, 6, 7,
+        6, 10, 5, 9, 8, 12, 7, 11, 9, 15, 10, 16, 12, 13, 11, 14
     )
 }
 $script:MeshStation = @{
     V = [double[]]@(
-        0, 560, 0,  0, -560, 0,  560, 0, 0,  -560, 0, 0,  0, 0, 560,  0, 0, -560
+        560, 0, 560, 0, 560, 560, -560, 0, 560,
+        0, -560, 560, 560, -560, 0, 560, 560, 0,
+        -560, 560, 0, -560, -560, 0, 560, 0, -560,
+        0, 560, -560, -560, 0, -560, 0, -560, -560,
+        35, -105, 560, 35, 105, 560, -35, 105, 560,
+        -35, -105, 560
     )
     E = [int[]]@(
-        0,2, 0,3, 0,4, 0,5, 1,2, 1,3, 1,4, 1,5, 2,4, 4,3, 3,5, 5,2
+        0, 3, 0, 1, 1, 2, 2, 3, 3, 4, 0, 4, 0, 5, 5, 1,
+        1, 6, 2, 6, 2, 7, 3, 7, 8, 11, 8, 9, 9, 10, 10, 11,
+        4, 11, 4, 8, 5, 8, 5, 9, 6, 9, 6, 10, 7, 10, 7, 11
     )
 }
 $script:MeshPort = @{
     V = [double[]]@(
-        -150, -70, 620,  150, -70, 620,  150, 70, 620,  -150, 70, 620
+        35, -105, 560, 35, 105, 560, -35, 105, 560, -35, -105, 560
     )
-    E = [int[]]@(0,1, 1,2, 2,3, 3,0, 0,2, 1,3)
-}
-$script:MeshRock = @{
-    V = [double[]]@(
-        0, 28, 8,  -26, 6, -8,  18, 8, -22,  8, -24, 6,  -14, -6, 20,  22, -4, 12
-    )
-    E = [int[]]@(0,1, 0,2, 0,4, 0,5, 1,2, 1,3, 2,3, 2,5, 3,4, 4,5, 1,4, 3,5)
-}
-$script:MeshCan = @{
-    V = [double[]]@(
-        -12, -12, 12,  12, -12, 12,  12, 12, 12,  -12, 12, 12,
-        -12, -12, -12,  12, -12, -12,  12, 12, -12,  -12, 12, -12
-    )
-    E = [int[]]@(0,1, 1,2, 2,3, 3,0, 4,5, 5,6, 6,7, 7,4, 0,4, 1,5, 2,6, 3,7)
+    E = [int[]]@(0, 1, 1, 2, 2, 3, 3, 0)
 }
 
 function F0([double]$n) { return ([Math]::Round($n)).ToString($script:Inv) }
@@ -775,20 +932,20 @@ function Get-Steer([double[]]$m, [double]$dx, [double]$dy, [double]$dz) {
 
 function New-Ship([string]$type, [string]$role, [double]$x, [double]$y, [double]$z) {
     $hull = 22.0; $dmg = 5.0; $maxSp = 220.0; $accel = 90.0; $bounty = 25; $scale = 1.0; $color = [byte]9
-    $ecm = $false; $msl = 0; $blink = $false
-    if ($type -eq 'Sidewinder') { $hull = 16; $dmg = 4; $maxSp = 280; $accel = 140; $bounty = 15; $scale = 0.62; $msl = 1 }
-    elseif ($type -eq 'Trader' -or $type -eq 'Cobra') { $hull = 40; $dmg = 5; $maxSp = 160; $accel = 60; $bounty = 35; $scale = 1.15; $color = [byte]11; $ecm = $true }
-    elseif ($type -eq 'Adder') { $hull = 28; $dmg = 5; $maxSp = 210; $accel = 85; $bounty = 30; $scale = 0.85; $msl = 1 }
-    elseif ($type -eq 'Krait') { $hull = 18; $dmg = 6; $maxSp = 310; $accel = 160; $bounty = 40; $scale = 0.7; $color = [byte]12; $msl = 1 }
-    elseif ($type -eq 'Asp') { $hull = 55; $dmg = 9; $maxSp = 320; $accel = 140; $bounty = 140; $scale = 1.05; $color = [byte]13; $msl = 1 }
-    elseif ($type -eq 'Fer-de-Lance') { $hull = 72; $dmg = 12; $maxSp = 300; $accel = 125; $bounty = 200; $scale = 1.2; $color = [byte]12; $msl = 2 }
-    elseif ($type -eq 'Python') { $hull = 90; $dmg = 10; $maxSp = 150; $accel = 50; $bounty = 160; $scale = 1.4; $color = [byte]9; $ecm = $true; $msl = 1 }
-    elseif ($type -eq 'Police') { $hull = 36; $dmg = 7; $maxSp = 260; $accel = 110; $bounty = 0; $scale = 1.0; $color = [byte]14 }
-    elseif ($type -eq 'Thargoid' -or $type -eq 'Alien') { $hull = 120; $dmg = 14; $maxSp = 280; $accel = 130; $bounty = 350; $scale = 1.7; $color = [byte]13; $ecm = $true; $msl = 2 }
-    elseif ($type -eq 'Thargon') { $hull = 8; $dmg = 4; $maxSp = 340; $accel = 180; $bounty = 8; $scale = 0.35; $color = [byte]13 }
-    elseif ($type -eq 'Asteroid') { $hull = 28; $dmg = 0; $maxSp = 20; $accel = 0; $bounty = 5; $scale = 1.6; $color = [byte]8 }
-    elseif ($type -eq 'Canister') { $hull = 1; $dmg = 0; $maxSp = 0; $accel = 0; $bounty = 0; $scale = 1.0; $color = [byte]11 }
-    elseif ($type -eq 'ThargoidStation') { $hull = 240; $dmg = 0; $maxSp = 0; $accel = 0; $bounty = 5000; $scale = 1.15; $color = [byte]13 }
+    $ecm = $false; $msl = 0; $blink = $false; $radius = 40.0
+    if ($type -eq 'Sidewinder') { $hull = 16; $dmg = 4; $maxSp = 280; $accel = 140; $bounty = 15; $radius = 40; $msl = 1 }
+    elseif ($type -eq 'Trader' -or $type -eq 'Cobra') { $hull = 40; $dmg = 5; $maxSp = 160; $accel = 60; $bounty = 35; $radius = 90; $color = [byte]11; $ecm = $true }
+    elseif ($type -eq 'Adder') { $hull = 28; $dmg = 5; $maxSp = 210; $accel = 85; $bounty = 30; $radius = 32; $msl = 1 }
+    elseif ($type -eq 'Krait') { $hull = 18; $dmg = 6; $maxSp = 310; $accel = 160; $bounty = 40; $radius = 60; $color = [byte]12; $msl = 1 }
+    elseif ($type -eq 'Asp') { $hull = 55; $dmg = 9; $maxSp = 320; $accel = 140; $bounty = 140; $radius = 55; $color = [byte]13; $msl = 1 }
+    elseif ($type -eq 'Fer-de-Lance') { $hull = 72; $dmg = 12; $maxSp = 300; $accel = 125; $bounty = 200; $radius = 70; $color = [byte]12; $msl = 2 }
+    elseif ($type -eq 'Python') { $hull = 90; $dmg = 10; $maxSp = 150; $accel = 50; $bounty = 160; $radius = 140; $color = [byte]9; $ecm = $true; $msl = 1 }
+    elseif ($type -eq 'Police') { $hull = 36; $dmg = 7; $maxSp = 260; $accel = 110; $bounty = 0; $radius = 48; $color = [byte]14 }
+    elseif ($type -eq 'Thargoid' -or $type -eq 'Alien') { $hull = 120; $dmg = 14; $maxSp = 280; $accel = 130; $bounty = 350; $radius = 110; $color = [byte]13; $ecm = $true; $msl = 2 }
+    elseif ($type -eq 'Thargon') { $hull = 8; $dmg = 4; $maxSp = 340; $accel = 180; $bounty = 8; $radius = 28; $color = [byte]13 }
+    elseif ($type -eq 'Asteroid') { $hull = 28; $dmg = 0; $maxSp = 20; $accel = 0; $bounty = 5; $radius = 55; $color = [byte]8 }
+    elseif ($type -eq 'Canister') { $hull = 1; $dmg = 0; $maxSp = 0; $accel = 0; $bounty = 0; $radius = 20; $color = [byte]11 }
+    elseif ($type -eq 'ThargoidStation') { $hull = 240; $dmg = 0; $maxSp = 0; $accel = 0; $bounty = 5000; $radius = 520; $color = [byte]13 }
     $m = New-Object 'double[]' 9
     Set-Identity $m
     $ship = @{
@@ -796,7 +953,7 @@ function New-Ship([string]$type, [string]$role, [double]$x, [double]$y, [double]
         X = $x; Y = $y; Z = $z; VX = 0.0; VY = 0.0; VZ = 0.0
         M = $m; Hull = $hull; HullMax = $hull; Dmg = $dmg; MaxSp = $maxSp; Accel = $accel
         Bounty = $bounty; Scale = $scale; Color = $color; Cool = 0.8 + ($script:NextId % 5) * 0.15
-        Provoked = $false; Radius = 40.0 * $scale
+        Provoked = $false; Radius = $radius
         Jx = ($x * 0.15); Jy = 200.0; Jz = $z
         Ecm = $ecm; Msl = $msl; Blink = $blink; Good = ''; SpawnT = 3.0
     }
@@ -813,15 +970,19 @@ function Flush-Pending {
 
 function Mesh-Of($ship) {
     switch ($ship.Type) {
-        'Trader' { return $script:MeshTrader }
-        'Cobra' { return $script:MeshTrader }
-        'Adder' { return $script:MeshTrader }
+        'Sidewinder' { return $script:MeshSide }
+        'Viper' { return $script:MeshViper }
+        'Police' { return $script:MeshViper }
+        'Trader' { return $script:MeshCobra }
+        'Cobra' { return $script:MeshCobra }
+        'Adder' { return $script:MeshAdder }
+        'Krait' { return $script:MeshKrait }
         'Python' { return $script:MeshPython }
-        'Asp' { return $script:MeshPython }
-        'Fer-de-Lance' { return $script:MeshPython }
-        'Alien' { return $script:MeshAlien }
-        'Thargoid' { return $script:MeshAlien }
-        'Thargon' { return $script:MeshAlien }
+        'Asp' { return $script:MeshAsp }
+        'Fer-de-Lance' { return $script:MeshFdl }
+        'Alien' { return $script:MeshThargoid }
+        'Thargoid' { return $script:MeshThargoid }
+        'Thargon' { return $script:MeshThargon }
         'Asteroid' { return $script:MeshRock }
         'Canister' { return $script:MeshCan }
         'ThargoidStation' { return $script:MeshStation }
@@ -2244,11 +2405,11 @@ function Draw-Flight {
         if ($script:BodyOn) { Plot-Dot ([int]$script:BodyX) ([int]$script:BodyY) $d.Color }
     }
     foreach ($b in $script:Bolts) {
-        Project-Body $b.X $b.Y $b.Z
-        if ($script:BodyOn) {
-            Plot-Dot ([int]$script:BodyX) ([int]$script:BodyY) 11
-            Plot-Dot ([int]$script:BodyX + 1) ([int]$script:BodyY) 11
-        }
+        if ($null -eq $script:BoltM) { $script:BoltM = New-Object 'double[]' 9 }
+        Set-Facing $script:BoltM $b.VX $b.VY $b.VZ
+        $ms = 0.5
+        if ($b.Heavy) { $ms = 0.75 }
+        Draw-Mesh $script:MeshMissile $b.X $b.Y $b.Z $script:BoltM $ms '#' 11
     }
     if ($script:LaserT -gt 0) {
         $dx = $script:Lx - $script:Px; $dy = $script:Ly - $script:Py; $dz = $script:Lz - $script:Pz

@@ -46,6 +46,7 @@ $script:ScanRange = 10240.0
 $script:ScanDots = $null
 $script:ScanBuf = $null
 $script:ScanCol = $null
+$script:ShowStars = $null
 $script:Heat = 0.0
 $script:Temp = 0.0
 $script:MissileArm = 0
@@ -1057,6 +1058,18 @@ function Repair-Axes([double[]]$m) {
     $m[0] = $m[4] * $m[8] - $m[5] * $m[7]
     $m[1] = $m[5] * $m[6] - $m[3] * $m[8]
     $m[2] = $m[3] * $m[7] - $m[4] * $m[6]
+}
+
+function Yaw-Mesh([double[]]$m, [double]$yaw) {
+    if ([Math]::Abs($yaw) -lt 0.0000001) { return }
+    $c = [Math]::Cos($yaw)
+    $s = [Math]::Sin($yaw)
+    for ($i = 0; $i -lt 9; $i += 3) {
+        $x = $m[$i]
+        $z = $m[$i + 2]
+        $m[$i] = $x * $c + $z * $s
+        $m[$i + 2] = -$x * $s + $z * $c
+    }
 }
 
 function Turn-Ship([double[]]$m, [double]$pitch, [double]$roll) {
@@ -3172,18 +3185,214 @@ function Paint-Title {
     Write-Mid 5 'Unofficial console remake of the 1984 game.' 8
     Write-Mid 6 'A Cobra Mk III, a procedural galaxy, a station to dock.' 7
     $y = 9
+    $last = $y + 3
     if (Test-Path $script:SavePath) {
         Write-Mid $y 'N  new commander' 15
         Write-Mid ($y + 1) 'L  load commander' 15
         Write-Mid ($y + 2) 'H  how to fly' 15
-        Write-Mid ($y + 3) 'Q  quit' 15
+        Write-Mid ($y + 3) 'P  presentation' 15
+        Write-Mid ($y + 4) 'Q  quit' 15
+        $last = $y + 4
     }
     else {
         Write-Mid $y 'N  new commander' 15
         Write-Mid ($y + 1) 'H  how to fly' 15
-        Write-Mid ($y + 2) 'Q  quit' 15
+        Write-Mid ($y + 2) 'P  presentation' 15
+        Write-Mid ($y + 3) 'Q  quit' 15
     }
-    Write-Mid ($script:H - 3) 'The view follows the window. 80x30 is comfortable.' 8
+    $hintY = $script:H - 3
+    if ($hintY -gt $last) {
+        Write-Mid $hintY 'The view follows the window. 80x30 is comfortable.' 8
+    }
+}
+
+function Get-ShowObjects {
+    $list = @(
+        @{ Name = 'Cobra Mk III'; Mesh = $script:MeshCobra; Scale = 1.0; Color = [byte]11; Slot = $false },
+        @{ Name = 'Sidewinder'; Mesh = $script:MeshSide; Scale = 1.0; Color = [byte]9; Slot = $false },
+        @{ Name = 'Viper'; Mesh = $script:MeshViper; Scale = 1.0; Color = [byte]14; Slot = $false },
+        @{ Name = 'Adder'; Mesh = $script:MeshAdder; Scale = 1.0; Color = [byte]9; Slot = $false },
+        @{ Name = 'Krait'; Mesh = $script:MeshKrait; Scale = 1.0; Color = [byte]12; Slot = $false },
+        @{ Name = 'Asp Mk II'; Mesh = $script:MeshAsp; Scale = 1.0; Color = [byte]13; Slot = $false },
+        @{ Name = 'Fer-de-Lance'; Mesh = $script:MeshFdl; Scale = 1.0; Color = [byte]12; Slot = $false },
+        @{ Name = 'Python'; Mesh = $script:MeshPython; Scale = 1.0; Color = [byte]9; Slot = $false },
+        @{ Name = 'Thargoid'; Mesh = $script:MeshThargoid; Scale = 1.0; Color = [byte]13; Slot = $false },
+        @{ Name = 'Thargon'; Mesh = $script:MeshThargon; Scale = 1.0; Color = [byte]13; Slot = $false },
+        @{ Name = 'Missile'; Mesh = $script:MeshMissile; Scale = 1.0; Color = [byte]11; Slot = $false },
+        @{ Name = 'Cargo canister'; Mesh = $script:MeshCan; Scale = 1.0; Color = [byte]11; Slot = $false },
+        @{ Name = 'Asteroid'; Mesh = $script:MeshRock; Scale = 1.0; Color = [byte]8; Slot = $false },
+        @{ Name = 'Coriolis station'; Mesh = $script:MeshStation; Scale = 1.0; Color = [byte]3; Slot = $true }
+    )
+    return ,$list
+}
+
+function Mesh-Reach($mesh, [double]$scale) {
+    $verts = $mesh.V
+    $reach = 1.0
+    for ($i = 0; $i -lt $verts.Length; $i += 3) {
+        $x = $verts[$i] * $scale
+        $y = $verts[$i + 1] * $scale
+        $z = $verts[$i + 2] * $scale
+        $r = [Math]::Sqrt($x * $x + $y * $y + $z * $z)
+        if ($r -gt $reach) { $reach = $r }
+    }
+    return $reach
+}
+
+function Prepare-ShowView {
+    $script:ViewY = 0
+    $script:ViewH = $script:H
+    $gapTop = 2
+    $gapBot = $script:H - 8
+    if ($gapBot -lt $gapTop) { $gapBot = $gapTop }
+    $script:CY = [int](($gapTop + $gapBot) / 2)
+    $script:Fov = [Math]::Max(16.0, ($gapBot - $gapTop + 1) * 1.2)
+    $script:DW = $script:W * 2
+    $script:DH = $script:ViewH * 4
+    $need = $script:DW * $script:DH
+    if ($null -eq $script:Dots -or $script:Dots.Length -ne $need) {
+        $script:Dots = New-Object 'byte[]' $need
+    }
+    $script:DotSX = $script:Fov * 3.30
+    $script:DotSY = $script:Fov * 3.28
+    $script:DX = ($script:CX * 2) + 1
+    $script:DY = (($script:CY - $script:ViewY) * 4) + 2
+}
+
+function Ensure-ShowStars {
+    if ($null -ne $script:ShowStars) { return }
+    $n = 70
+    $script:ShowStars = New-Object 'double[]' ($n * 3)
+    $rng = New-Object System.Random 1984
+    for ($i = 0; $i -lt $n; $i++) {
+        $a = ($rng.NextDouble() - 0.5) * 1.7
+        $b = ($rng.NextDouble() - 0.5) * 1.15
+        $r = 4000.0 + $rng.NextDouble() * 18000.0
+        $script:ShowStars[$i * 3] = [Math]::Sin($a) * [Math]::Cos($b) * $r
+        $script:ShowStars[$i * 3 + 1] = [Math]::Sin($b) * $r
+        $script:ShowStars[$i * 3 + 2] = [Math]::Cos($a) * [Math]::Cos($b) * $r
+    }
+}
+
+function Draw-ShowFrame([int]$index, [double[]]$spin) {
+    Ensure-ShowStars
+    $count = 70
+    for ($i = 0; $i -lt $count; $i++) {
+        Project-Body $script:ShowStars[$i * 3] $script:ShowStars[$i * 3 + 1] $script:ShowStars[$i * 3 + 2]
+        if ($script:BodyOn) {
+            $col = [byte]8
+            if ($script:BodyZ -lt 9000) { $col = [byte]7 }
+            Plot-Dot ([int]$script:BodyX) ([int]$script:BodyY) $col
+        }
+    }
+    $objs = Get-ShowObjects
+    if ($index -lt 0) { $index = 0 }
+    if ($index -ge $objs.Count) { $index = $objs.Count - 1 }
+    $obj = $objs[$index]
+    $reach = Mesh-Reach $obj.Mesh ([double]$obj.Scale)
+    $fit = [Math]::Min($script:DW, $script:DH) * 0.30
+    if ($fit -lt 18.0) { $fit = 18.0 }
+    $dist = $reach * $script:DotSX / $fit
+    $minDist = $reach * 1.85
+    if ($dist -lt $minDist) { $dist = $minDist }
+    Draw-Mesh $obj.Mesh 0 0 $dist $spin ([double]$obj.Scale) '#' ([byte]$obj.Color)
+    if ($obj.Slot) { Draw-Mesh $script:MeshPort 0 0 $dist $spin 1 '#' 14 }
+    Stamp-Braille
+    Write-Mid 0 'PRESENTATION' 14
+    Write-Mid 1 "$($obj.Name)   $($index + 1)/$($objs.Count)" 15
+    $credits = @(
+        @{ T = 'Thanks to David Braben and Ian Bell,'; C = [byte]11 },
+        @{ T = 'who wrote the original Elite, 1984.'; C = [byte]11 },
+        @{ T = 'This remake was written by Dm.'; C = [byte]15 },
+        @{ T = 'https://github.com/DmNep/elite'; C = [byte]14 },
+        @{ T = 'Send wishes and suggestions there.'; C = [byte]7 },
+        @{ T = 'Please star the repository.'; C = [byte]11 },
+        @{ T = 'Left/Right  next object    Esc  back'; C = [byte]8 }
+    )
+    $y = $script:H - $credits.Count
+    if ($y -lt 2) { $y = 2 }
+    foreach ($line in $credits) {
+        if ($y -ge $script:H) { break }
+        Write-Mid $y $line.T $line.C
+        $y++
+    }
+}
+
+function Show-Presentation {
+    $keepPos = $false
+    $oldPx = 0.0
+    $oldPy = 0.0
+    $oldPz = 0.0
+    if (Get-Variable -Name Px -Scope Script -ErrorAction SilentlyContinue) {
+        $keepPos = $true
+        $oldPx = $script:Px
+        $oldPy = $script:Py
+        $oldPz = $script:Pz
+    }
+    $oldCam = $null
+    if ($null -ne $script:Cam) {
+        $oldCam = New-Object 'double[]' 9
+        [Array]::Copy($script:Cam, $oldCam, 9)
+    }
+    $script:Px = 0.0
+    $script:Py = 0.0
+    $script:Pz = 0.0
+    if ($null -eq $script:Cam) { $script:Cam = New-Object 'double[]' 9 }
+    Set-Identity $script:Cam
+    $spin = New-Object 'double[]' 9
+    Set-Facing $spin 0.0 0.0 -1.0
+    Yaw-Mesh $spin 0.7
+    Turn-Ship $spin -0.35 0.15
+    $objs = Get-ShowObjects
+    $index = 0
+    $clock = [Diagnostics.Stopwatch]::StartNew()
+    $lastStep = [datetime]::UtcNow.AddSeconds(-1)
+    try {
+        while ($true) {
+            $dt = $clock.Elapsed.TotalSeconds
+            $clock.Restart()
+            if ($dt -gt 0.05) { $dt = 0.05 }
+            if ($dt -lt 0.0) { $dt = 0.0 }
+            Sync-Console
+            Prepare-ShowView
+            $action = ''
+            if ([Console]::KeyAvailable) {
+                $k = [Console]::ReadKey($true)
+                if ($k.Key -eq 'LeftArrow') { $action = 'left' }
+                elseif ($k.Key -eq 'RightArrow') { $action = 'right' }
+                elseif ($k.Key -eq 'Escape') { $action = 'back' }
+            }
+            while ([Console]::KeyAvailable) { [void][Console]::ReadKey($true) }
+            if ($action -eq 'back') { break }
+            if ($action -eq 'left' -or $action -eq 'right') {
+                $now = [datetime]::UtcNow
+                if (($now - $lastStep).TotalMilliseconds -ge 180) {
+                    $lastStep = $now
+                    if ($action -eq 'left') { $index-- } else { $index++ }
+                    if ($index -lt 0) { $index = $objs.Count - 1 }
+                    if ($index -ge $objs.Count) { $index = 0 }
+                }
+            }
+            Yaw-Mesh $spin (0.28 * $dt)
+            Turn-Ship $spin (0.07 * $dt) (0.04 * $dt)
+            Repair-Axes $spin
+            Clear-Frame
+            Draw-ShowFrame $index $spin
+            Present-Frame
+            $spent = $clock.Elapsed.TotalMilliseconds
+            if ($spent -lt 40) { Start-Sleep -Milliseconds ([int](40 - $spent)) }
+        }
+    }
+    finally {
+        if ($keepPos) {
+            $script:Px = $oldPx
+            $script:Py = $oldPy
+            $script:Pz = $oldPz
+        }
+        if ($null -ne $oldCam) { [Array]::Copy($oldCam, $script:Cam, 9) }
+        if ($script:W -gt 0 -and $script:H -gt 0) { Set-Frame $script:W $script:H }
+        while ([Console]::KeyAvailable) { [void][Console]::ReadKey($true) }
+    }
 }
 
 function Read-Name {
@@ -3270,6 +3479,7 @@ function Show-Title {
             Say 'Save could not be read.'
         }
         if ($ch -eq 'h' -or $ch -eq 'H') { Show-Help 'title' | Out-Null }
+        if ($ch -eq 'p' -or $ch -eq 'P') { Show-Presentation }
         if ($ch -eq 'q' -or $ch -eq 'Q' -or $k.Key -eq 'Escape') { return 'quit' }
     }
 }
@@ -3652,7 +3862,7 @@ function Show-Info {
 
 function Show-Pause {
     $sel = 0
-    $items = @('Continue', 'Local chart', 'Galactic chart', 'Jump', 'How to fly', 'Save', 'Exit to title')
+    $items = @('Continue', 'Local chart', 'Galactic chart', 'Jump', 'How to fly', 'Save', 'Presentation', 'Exit to title')
     while ($true) {
         Sync-Console
         Clear-Frame
@@ -3676,7 +3886,8 @@ function Show-Pause {
                 3 { return 'jump' }
                 4 { Show-Help 'pause' | Out-Null }
                 5 { Save-Commander; Say 'Commander saved.'; return 'continue' }
-                6 { return 'title' }
+                6 { Show-Presentation }
+                7 { return 'title' }
             }
         }
     }
@@ -3900,6 +4111,41 @@ function Invoke-SelfTest {
     $script:Laser[3] = 'none'
     Paint-Docked 0
     Paint-Market 0
+    $script:Px = 0.0
+    $script:Py = 0.0
+    $script:Pz = 0.0
+    if ($null -eq $script:Cam) { $script:Cam = New-Object 'double[]' 9 }
+    Set-Identity $script:Cam
+    Prepare-ShowView
+    $spin = New-Object 'double[]' 9
+    Set-Facing $spin 0.0 0.0 -1.0
+    Yaw-Mesh $spin 0.8
+    Turn-Ship $spin -0.4 0.2
+    $showN = (Get-ShowObjects).Count
+    Check ($showN -eq 14) "showcase count $showN"
+    $wires = 0
+    for ($si = 0; $si -lt $showN; $si++) {
+        Clear-Frame
+        Draw-ShowFrame $si $spin
+        $got = 0
+        foreach ($ch in $script:Buf) {
+            $code = [int]$ch
+            if ($code -ge 0x2800 -and $code -le 0x28FF) { $got++ }
+        }
+        if ($got -gt $wires) { $wires = $got }
+        if ($si -eq 0) {
+            $page = -join $script:Buf
+            Check ($page.Contains('PRESENTATION')) 'presentation title'
+            Check ($page.Contains('Cobra Mk III')) 'presentation ship'
+            Check ($page.Contains('David Braben')) 'presentation thanks'
+            Check ($page.Contains('written by Dm')) 'presentation author'
+            Check ($page.Contains('github.com/DmNep/elite')) 'presentation link'
+            Check ($page.Contains('wishes and suggestions')) 'presentation wishes'
+            Check ($page.Contains('Please star')) 'presentation star'
+        }
+    }
+    Check ($wires -ge 8) "presentation wires $wires"
+    Set-Frame 96 34
 
     $script:Cash = 100
     $script:Hull = 40

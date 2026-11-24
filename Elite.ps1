@@ -39,6 +39,13 @@ $script:View = 0
 $script:Laser = @('pulse', 'none', 'none', 'none')
 $script:ShieldF = 100.0
 $script:ShieldA = 100.0
+$script:DialPitch = 0.0
+$script:DialRoll = 0.0
+$script:EcmT = 0.0
+$script:ScanRange = 10240.0
+$script:ScanDots = $null
+$script:ScanBuf = $null
+$script:ScanCol = $null
 $script:Heat = 0.0
 $script:Temp = 0.0
 $script:MissileArm = 0
@@ -130,7 +137,9 @@ $script:Goods = @(
 
 # Wireframes follow the classic Elite blueprints: +X right, +Y up, +Z nose.
 # The Coriolis is scaled by 3.5 so the docking face sits 560 m out. It rolls about that face.
-# N is a face normal. A names the two faces of each edge. An edge is drawn when one face points this way.
+# N is the face plane: direction and distance from the centre. A names the two faces of each edge.
+# An edge is drawn when the eye is near enough and on the outside of one of those faces.
+# FV and EV are the original distances, on the 0-31 scale, past which a face is kept and an edge is dropped.
 # A Thargon keeps the canister edge list, the way the cassette blueprint does.
 $script:MeshSide = @{
     V = [double[]]@(
@@ -152,6 +161,8 @@ $script:MeshSide = @{
         0, 5, 2, 6, 0, 2, 0, 1, 1, 4, 1, 3, 2, 3, 3, 4, 
         3, 6, 5, 6, 4, 5, 3, 3, 3, 3, 3, 3, 3, 3
     )
+    FV = [int[]]@(31, 31, 31, 31, 31, 31, 31)
+    EV = [int[]]@(31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 15, 12, 12, 12)
 }
 $script:MeshViper = @{
     V = [double[]]@(
@@ -176,6 +187,8 @@ $script:MeshViper = @{
         0, 6, 5, 6, 1, 6, 3, 6, 2, 6, 6, 4, 6, 6, 6, 6, 
         6, 6, 6, 6, 6, 6, 6, 6
     )
+    FV = [int[]]@(31, 31, 31, 31, 31, 31, 31)
+    EV = [int[]]@(31, 30, 30, 31, 30, 30, 30, 30, 31, 30, 31, 30, 31, 30, 19, 18, 19, 18, 16, 16)
 }
 $script:MeshCobra = @{
     V = [double[]]@(
@@ -211,6 +224,8 @@ $script:MeshCobra = @{
         9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 5, 6, 
         9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9
     )
+    FV = [int[]]@(31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31)
+    EV = [int[]]@(31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 29, 29, 6, 20, 20, 20, 20, 19, 17, 19, 19, 30, 6, 6, 8, 6, 6, 8)
 }
 $script:MeshAdder = @{
     V = [double[]]@(
@@ -240,6 +255,8 @@ $script:MeshAdder = @{
         12, 10, 3, 1, 5, 3, 13, 0, 14, 1, 13, 9, 13, 4, 14, 10, 
         14, 5, 0, 0, 0, 0, 0, 0, 0, 0
     )
+    FV = [int[]]@(31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31)
+    EV = [int[]]@(31, 7, 31, 31, 31, 31, 31, 7, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 5, 3, 4, 3)
 }
 $script:MeshKrait = @{
     V = [double[]]@(
@@ -264,6 +281,8 @@ $script:MeshKrait = @{
         1, 0, 3, 2, 5, 4, 0, 0, 0, 0, 3, 3, 3, 3, 4, 4, 
         4, 4, 4, 4, 5, 5, 5, 5, 5, 5
     )
+    FV = [int[]]@(31, 31, 31, 31, 31, 31)
+    EV = [int[]]@(31, 31, 31, 31, 31, 31, 31, 31, 30, 30, 8, 9, 6, 9, 6, 8, 8, 7, 7, 8, 8)
 }
 $script:MeshAsp = @{
     V = [double[]]@(
@@ -291,8 +310,10 @@ $script:MeshAsp = @{
         2, 1, 1, 0, 2, 0, 11, 1, 6, 1, 9, 7, 4, 0, 10, 8, 
         5, 2, 11, 2, 7, 1, 7, 0, 8, 2, 8, 0, 11, 6, 11, 5, 
         6, 3, 5, 3, 4, 3, 10, 5, 10, 4, 9, 6, 9, 4, 11, 11, 
-        11, 11, 11, 11, 11, 11, 4, 0
+        11, 11,         11, 11, 11, 11, 4, 0
     )
+    FV = [int[]]@(31, 31, 31, 22, 31, 31, 31, 31, 31, 31, 31, 31)
+    EV = [int[]]@(22, 22, 22, 31, 31, 16, 31, 16, 31, 31, 31, 31, 31, 31, 31, 31, 22, 22, 22, 31, 31, 31, 31, 10, 9, 8, 8, 10)
 }
 $script:MeshFdl = @{
     V = [double[]]@(
@@ -322,6 +343,8 @@ $script:MeshFdl = @{
         4, 3, 5, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
         9, 9, 9, 9, 9, 9
     )
+    FV = [int[]]@(28, 31, 31, 31, 31, 31, 28, 28, 28, 31)
+    EV = [int[]]@(31, 31, 31, 31, 31, 28, 28, 28, 28, 28, 15, 11, 11, 15, 14, 14, 14, 14, 8, 9, 11, 8, 9, 11, 12, 12, 8)
 }
 $script:MeshPython = @{
     V = [double[]]@(
@@ -349,6 +372,8 @@ $script:MeshPython = @{
         9, 10, 8, 11, 8, 12, 9, 12, 12, 10, 11, 12, 8, 9, 10, 11, 
         4, 5, 6, 7
     )
+    FV = [int[]]@(31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31)
+    EV = [int[]]@(31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 7, 7, 7, 7, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31)
 }
 $script:MeshThargoid = @{
     V = [double[]]@(
@@ -378,6 +403,8 @@ $script:MeshThargoid = @{
         8, 9, 0, 9, 1, 9, 2, 9, 3, 9, 5, 9, 6, 9, 7, 9, 
         9, 9, 9, 9
     )
+    FV = [int[]]@(31, 31, 31, 31, 31, 31, 31, 31, 31, 31)
+    EV = [int[]]@(31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 30, 30)
 }
 $script:MeshThargon = @{
     V = [double[]]@(
@@ -467,8 +494,10 @@ $script:MeshMissile = @{
     A = [int[]]@(
         1, 2, 2, 3, 0, 3, 0, 1, 4, 2, 1, 5, 0, 6, 3, 7, 
         4, 7, 4, 5, 5, 6, 6, 7, 6, 8, 7, 8, 4, 8, 5, 8, 
-        5, 8, 7, 8, 7, 8, 5, 8, 4, 7, 4, 5, 6, 7, 5, 6
+        5, 8, 7, 8, 7, 8,         5, 8, 4, 7, 4, 5, 6, 7, 5, 6
     )
+    FV = [int[]]@(31, 31, 31, 31, 31, 31, 31, 31, 31)
+    EV = [int[]]@(31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 8, 8, 8, 8, 8, 8, 8, 8)
 }
 $script:MeshStation = @{
     V = [double[]]@(
@@ -485,11 +514,11 @@ $script:MeshStation = @{
         4, 11, 4, 8, 5, 8, 5, 9, 6, 9, 6, 10, 7, 10, 7, 11
     )
     N = [double[]]@(
-        0, 0, 160, 107, -107, 107, 107, 107, 107, 
-        -107, 107, 107, -107, -107, 107, 0, -160, 0, 
-        160, 0, 0, -160, 0, 0, 0, 160, 0, 
-        -107, -107, -107, 107, -107, -107, 107, 107, -107, 
-        -107, 107, -107, 0, 0, -160
+        0, 0, 560, 374.5, -374.5, 374.5, 374.5, 374.5, 374.5,
+        -374.5, 374.5, 374.5, -374.5, -374.5, 374.5, 0, -560, 0,
+        560, 0, 0, -560, 0, 0, 0, 560, 0,
+        -374.5, -374.5, -374.5, 374.5, -374.5, -374.5, 374.5, 374.5, -374.5,
+        -374.5, 374.5, -374.5, 0, 0, -560
     )
     A = [int[]]@(
         0, 1, 0, 2, 0, 3, 0, 4, 1, 5, 1, 6, 2, 6, 2, 8, 
@@ -502,8 +531,10 @@ $script:MeshPort = @{
         35, -105, 560, 35, 105, 560, -35, 105, 560, -35, -105, 560
     )
     E = [int[]]@(0, 1, 1, 2, 2, 3, 3, 0)
-    N = [double[]]@(0, 0, 1)
+    N = [double[]]@(0, 0, 560)
     A = [int[]]@(0, 0, 0, 0, 0, 0, 0, 0)
+    FV = [int[]]@(31)
+    EV = [int[]]@(30, 30, 30, 30)
 }
 
 function F0([double]$n) { return ([Math]::Round($n)).ToString($script:Inv) }
@@ -1542,6 +1573,7 @@ function Try-ECM {
     if (-not $script:ECM) { Say 'No ECM system.'; return }
     if ($script:Energy -lt 16) { Say 'Not enough energy for ECM.'; return }
     $script:Energy -= 16
+    $script:EcmT = 2.2
     if ($null -ne $script:Bolts) { $script:Bolts.Clear() }
     Say 'ECM. Missiles destroyed.'
 }
@@ -1935,6 +1967,7 @@ function Update-Bolts([double]$dt) {
             $dist = Speed-Of $dx $dy $dz
             if ($null -ne $target -and $target.Ecm -and $dist -lt 900 -and (($script:Tick % 4) -eq 0)) {
                 $script:Bolts.Clear()
+                $script:EcmT = 2.2
                 Say "$($target.Type) fires ECM."
                 return
             }
@@ -2017,6 +2050,8 @@ function Update-Flight([double]$dt) {
     $script:LaserT -= $dt
     $script:HitFlash -= $dt
     $script:SinceHit += $dt
+    $script:EcmT -= $dt
+    if ($script:EcmT -lt 0) { $script:EcmT = 0 }
     $script:MsgT -= $dt
     $script:Tick++
     $script:Heat -= 24 * $dt
@@ -2080,6 +2115,8 @@ function Update-Flight([double]$dt) {
         else { $script:InThrust = 0; $script:InBrake = $false }
     }
 
+    $script:DialPitch = $pitch
+    $script:DialRoll = $roll
     Turn-Ship $script:M ($pitch * $dt) ($roll * $dt)
     Repair-Axes $script:M
     if ($script:InThrust -gt 0) {
@@ -2182,14 +2219,16 @@ function Update-Flight([double]$dt) {
 }
 
 function Set-Frame([int]$w, [int]$h) {
-    if ($w -lt 50) { $w = 50 }
-    if ($h -lt 24) { $h = 24 }
+    if ($w -lt 40) { $w = 40 }
+    if ($h -lt 16) { $h = 16 }
     $script:W = $w
     $script:H = $h
-    $script:HudH = 8
+    $script:HudH = 11
+    if ($h -lt 28) { $script:HudH = 9 }
+    if ($h -lt 24) { $script:HudH = 6 }
     $script:ViewY = 1
     $script:ViewH = $h - 1 - $script:HudH
-    if ($script:ViewH -lt 10) { $script:ViewH = 10 }
+    if ($script:ViewH -lt 6) { $script:ViewH = 6 }
     $script:HudY = $script:ViewY + $script:ViewH
     if ($script:HudY + $script:HudH -gt $h) { $script:HudY = $h - $script:HudH }
     $script:CX = [int]($w / 2)
@@ -2219,11 +2258,16 @@ function Sync-Console {
         $h = [Console]::WindowHeight - 1
     }
     catch { }
-    if ($w -lt 64) { $w = 64 }
-    if ($h -lt 26) { $h = 26 }
-    if ($w -gt 110) { $w = 110 }
-    if ($h -gt 40) { $h = 40 }
-    if ($script:W -ne $w -or $script:H -ne $h -or $null -eq $script:Buf) { Set-Frame $w $h }
+    if ($w -lt 40) { $w = 40 }
+    if ($h -lt 16) { $h = 16 }
+    if ($w -gt 200) { $w = 200 }
+    if ($h -gt 64) { $h = 64 }
+    if ($script:W -eq $w -and $script:H -eq $h -and $null -ne $script:Buf) { return }
+    $redraw = ($null -ne $script:Buf -and $script:ConsoleOn)
+    Set-Frame $w $h
+    if ($redraw) {
+        try { [Console]::Clear() } catch { }
+    }
 }
 
 function Clear-Frame {
@@ -2266,13 +2310,16 @@ namespace EliteBraille {
       if ((uint)x < (uint)dw && (uint)y < (uint)dh) dots[y * dw + x] = color;
     }
     public static void Line(byte[] dots, int dw, int dh, int x0, int y0, int x1, int y1, byte color) {
+      if (dw < 1 || dh < 1) return;
+      if (!Clip(ref x0, ref y0, ref x1, ref y1, 0, 0, dw - 1, dh - 1)) return;
       int dx = Math.Abs(x1 - x0);
       int sx = x0 < x1 ? 1 : -1;
       int dy = -Math.Abs(y1 - y0);
       int sy = y0 < y1 ? 1 : -1;
       int err = dx + dy;
       int guard = 0;
-      while (guard++ < 1600) {
+      int limit = dw + dh + 4;
+      while (guard++ < limit) {
         if ((uint)x0 < (uint)dw && (uint)y0 < (uint)dh)
           dots[y0 * dw + x0] = color;
         if (x0 == x1 && y0 == y1) break;
@@ -2280,6 +2327,43 @@ namespace EliteBraille {
         if (e2 >= dy) { err += dy; x0 += sx; }
         if (e2 <= dx) { err += dx; y0 += sy; }
       }
+    }
+    static int OutCode(int x, int y, int xMin, int yMin, int xMax, int yMax) {
+      int c = 0;
+      if (x < xMin) c |= 1;
+      else if (x > xMax) c |= 2;
+      if (y < yMin) c |= 4;
+      else if (y > yMax) c |= 8;
+      return c;
+    }
+    static bool Clip(ref int x0, ref int y0, ref int x1, ref int y1, int xMin, int yMin, int xMax, int yMax) {
+      int c0 = OutCode(x0, y0, xMin, yMin, xMax, yMax);
+      int c1 = OutCode(x1, y1, xMin, yMin, xMax, yMax);
+      for (int n = 0; n < 12; n++) {
+        if ((c0 | c1) == 0) return true;
+        if ((c0 & c1) != 0) return false;
+        int c = c0 != 0 ? c0 : c1;
+        int x, y;
+        if ((c & 8) != 0) {
+          x = x0 + (int)(((long)(x1 - x0) * (yMax - y0)) / (y1 - y0));
+          y = yMax;
+        }
+        else if ((c & 4) != 0) {
+          x = x0 + (int)(((long)(x1 - x0) * (yMin - y0)) / (y1 - y0));
+          y = yMin;
+        }
+        else if ((c & 2) != 0) {
+          y = y0 + (int)(((long)(y1 - y0) * (xMax - x0)) / (x1 - x0));
+          x = xMax;
+        }
+        else {
+          y = y0 + (int)(((long)(y1 - y0) * (xMin - x0)) / (x1 - x0));
+          x = xMin;
+        }
+        if (c == c0) { x0 = x; y0 = y; c0 = OutCode(x0, y0, xMin, yMin, xMax, yMax); }
+        else { x1 = x; y1 = y; c1 = OutCode(x1, y1, xMin, yMin, xMax, yMax); }
+      }
+      return false;
     }
     public static void Stamp(byte[] dots, int dw, char[] buf, byte[] col, int stride, int viewY, int viewH, byte[] pri) {
       for (int cy = 0; cy < viewH; cy++) {
@@ -2438,19 +2522,39 @@ function Draw-Mesh($mesh, [double]$ox, [double]$oy, [double]$oz, [double[]]$rm, 
             $script:FaceVis = New-Object 'bool[]' $nf
         }
         $vis = $script:FaceVis
+        $dxs = $ox - $script:Px
+        $dys = $oy - $script:Py
+        $dzs = $oz - $script:Pz
+        $qx = $dxs * $rm[0] + $dys * $rm[1] + $dzs * $rm[2]
+        $qy = $dxs * $rm[3] + $dys * $rm[4] + $dzs * $rm[5]
+        $qz = $dxs * $rm[6] + $dys * $rm[7] + $dzs * $rm[8]
+        $ahead = $dxs * $c[6] + $dys * $c[7] + $dzs * $c[8]
+        $far = [int]($ahead / 256.0)
+        if ($far -lt 0) { $far = 0 }
+        if ($far -gt 31) { $far = 31 }
+        $fv = $null
+        if ($mesh.ContainsKey('FV')) { $fv = $mesh.FV }
         for ($i = 0; $i -lt $nf; $i++) {
-            $nx = $norms[$i * 3]; $ny = $norms[$i * 3 + 1]; $nz = $norms[$i * 3 + 2]
-            $nwx = $nx * $rm[0] + $ny * $rm[3] + $nz * $rm[6]
-            $nwy = $nx * $rm[1] + $ny * $rm[4] + $nz * $rm[7]
-            $nwz = $nx * $rm[2] + $ny * $rm[5] + $nz * $rm[8]
-            $vz = $nwx * $c[6] + $nwy * $c[7] + $nwz * $c[8]
-            $vis[$i] = ($vz -lt 0)
+            $faceFar = 31
+            if ($null -ne $fv -and $i -lt $fv.Length) { $faceFar = [int]$fv[$i] }
+            if ($far -gt $faceFar) { $vis[$i] = $true; continue }
+            $nx = $norms[$i * 3] * $scale
+            $ny = $norms[$i * 3 + 1] * $scale
+            $nz = $norms[$i * 3 + 2] * $scale
+            $dot = ($qx + $nx) * $nx + ($qy + $ny) * $ny + ($qz + $nz) * $nz
+            $vis[$i] = ($dot -lt 0)
         }
     }
     $adj = $null
-    if ($null -ne $vis) { $adj = $mesh.A }
+    $ev = $null
+    if ($null -ne $vis) {
+        $adj = $mesh.A
+        if ($mesh.ContainsKey('EV')) { $ev = $mesh.EV }
+    }
     for ($e = 0; $e -lt $edges.Length; $e += 2) {
         if ($null -ne $vis) {
+            $ei = [int]($e / 2)
+            if ($null -ne $ev -and $ei -lt $ev.Length -and $far -gt [int]$ev[$ei]) { continue }
             $f1 = $adj[$e]; $f2 = $adj[$e + 1]
             $show = $false
             if ($f1 -ge 0 -and $f1 -lt $vis.Length -and $vis[$f1]) { $show = $true }
@@ -2493,7 +2597,7 @@ function Get-Arrow {
     $script:CompassWhat = 'STN'
     $dx = -$script:Px; $dy = -$script:Py; $dz = -$script:Pz
     $station = Speed-Of $dx $dy $dz
-    if ($station -gt 9000) {
+    if ($station -gt $script:ScanRange) {
         $script:CompassWhat = 'PLN'
         $dx = $script:PlX - $script:Px; $dy = $script:PlY - $script:Py; $dz = $script:PlZ - $script:Pz
     }
@@ -2523,37 +2627,249 @@ function Get-Arrow {
     $script:StationDist = $dist
 }
 
-function Draw-Scanner {
-    $cx = $script:W - 16
-    $cy = $script:HudY + 4
-    if ($cx -lt 20) { return }
-    for ($a = 0; $a -lt 20; $a++) {
-        $t = $a * 6.28318 / 20.0
-        $x = [int]($cx + [Math]::Cos($t) * 9)
-        $y = [int]($cy + [Math]::Sin($t) * 2.4)
-        Write-At $x $y '.' 8 1
+function Write-Gauge([int]$x, [int]$y, [string]$name, [string]$bar) {
+    Write-At $x $y $name 7 2
+    Write-At ($x + 3) $y $bar 9 $bar.Length
+}
+
+function Center-Bar([double]$v) {
+    $c = New-Object 'char[]' 5
+    $c[0] = '-'; $c[1] = '-'; $c[2] = '+'; $c[3] = '-'; $c[4] = '-'
+    $steps = [int]([Math]::Round([Math]::Abs($v) * 2.0))
+    if ($steps -gt 2) { $steps = 2 }
+    if ($steps -gt 0) {
+        if ($v -gt 0) {
+            for ($i = 1; $i -le $steps; $i++) { $c[2 + $i] = '#' }
+        }
+        else {
+            for ($i = 1; $i -le $steps; $i++) { $c[2 - $i] = '#' }
+        }
     }
-    Write-At $cx $cy '+' 14 1
-    $range = 14000.0
-    if (-not $script:Witch) {
-        World-To-Local $script:M (-$script:Px) (-$script:Py) (-$script:Pz)
-        $x = [int]($cx + ($script:LocX / $range) * 9)
-        $y = [int]($cy - ($script:LocZ / $range) * 2.4)
-        Write-At $x $y 'S' 11 1
-        World-To-Local $script:M ($script:PlX - $script:Px) ($script:PlY - $script:Py) ($script:PlZ - $script:Pz)
-        $x = [int]($cx + ($script:LocX / $range) * 9)
-        $y = [int]($cy - ($script:LocZ / $range) * 2.4)
-        Write-At $x $y 'P' 10 1
+    return [string]::new($c)
+}
+
+function Draw-Blip([double]$wx, [double]$wy, [double]$wz) {
+    $range = $script:ScanRange
+    if ($range -lt 1) { return }
+    World-To-Local $script:M ($wx - $script:Px) ($wy - $script:Py) ($wz - $script:Pz)
+    $lx = $script:LocX; $ly = $script:LocY; $lz = $script:LocZ
+    if ([Math]::Abs($lx) -gt $range -or [Math]::Abs($ly) -gt $range -or [Math]::Abs($lz) -gt $range) { return }
+    $bx = [int]([Math]::Round($script:ScCX + ($lx / $range) * $script:ScRX))
+    $by = [int]([Math]::Round($script:ScCY - ($lz / $range) * $script:ScRY))
+    $tip = [int]([Math]::Round($by - ($ly / $range) * $script:ScStick))
+    if ($tip -lt 1) { $tip = 1 }
+    if ($tip -gt ($script:ScDH - 2)) { $tip = $script:ScDH - 2 }
+    [EliteBraille.Raster]::Line($script:ScanDots, $script:ScDW, $script:ScDH, $bx, $by, $bx, $tip, 11)
+    [EliteBraille.Raster]::Plot($script:ScanDots, $script:ScDW, $script:ScDH, $bx, $tip, 15)
+    [EliteBraille.Raster]::Plot($script:ScanDots, $script:ScDW, $script:ScDH, $bx + 1, $tip, 15)
+    [EliteBraille.Raster]::Plot($script:ScanDots, $script:ScDW, $script:ScDH, $bx, $tip + 1, 15)
+}
+
+function Draw-Scanner([int]$ox, [int]$oy, [int]$cw, [int]$ch) {
+    if ($cw -lt 14 -or $ch -lt 4) { return }
+    if (-not ('EliteBraille.Raster' -as [type])) { return }
+    $dw = $cw * 2
+    $dh = $ch * 4
+    $need = $dw * $dh
+    if ($null -eq $script:ScanDots -or $script:ScanDots.Length -ne $need) {
+        $script:ScanDots = New-Object 'byte[]' $need
     }
+    else {
+        [Array]::Clear($script:ScanDots, 0, $need)
+    }
+    $script:ScDW = $dw
+    $script:ScDH = $dh
+    $script:ScCX = [int]($dw / 2)
+    $script:ScCY = [int]($dh / 2)
+    $script:ScRX = [int]($dw * 0.40)
+    $script:ScRY = [int]($script:ScRX * 0.27)
+    $maxRy = [int]($dh / 2) - 4
+    if ($maxRy -lt 3) { $maxRy = 3 }
+    if ($script:ScRY -gt $maxRy) { $script:ScRY = $maxRy }
+    if ($script:ScRX -gt ($dw / 2 - 2)) { $script:ScRX = [int]($dw / 2 - 2) }
+    if ($script:ScRX -lt 6) { $script:ScRX = 6 }
+    $script:ScStick = $script:ScRX * 0.50
+    $steps = 64
+    $px = 0
+    $py = 0
+    for ($i = 0; $i -le $steps; $i++) {
+        $t = $i * 6.2831853 / $steps
+        $x = [int]([Math]::Round($script:ScCX + [Math]::Cos($t) * $script:ScRX))
+        $y = [int]([Math]::Round($script:ScCY + [Math]::Sin($t) * $script:ScRY))
+        if ($i -gt 0) {
+            [EliteBraille.Raster]::Line($script:ScanDots, $dw, $dh, $px, $py, $x, $y, 14)
+        }
+        $px = $x
+        $py = $y
+    }
+    [EliteBraille.Raster]::Line($script:ScanDots, $dw, $dh, ($script:ScCX - $script:ScRX), $script:ScCY, ($script:ScCX + $script:ScRX), $script:ScCY, 6)
+    [EliteBraille.Raster]::Line($script:ScanDots, $dw, $dh, $script:ScCX, ($script:ScCY - $script:ScRY), $script:ScCX, ($script:ScCY + $script:ScRY), 6)
+    if (-not $script:Witch) { Draw-Blip 0 0 0 }
     foreach ($s in $script:Ships) {
-        World-To-Local $script:M ($s.X - $script:Px) ($s.Y - $script:Py) ($s.Z - $script:Pz)
-        $x = [int]($cx + ($script:LocX / $range) * 9)
-        $y = [int]($cy - ($script:LocZ / $range) * 2.4)
-        $mark = '+'
-        if ($script:LocY -gt 250) { $mark = '^' }
-        elseif ($script:LocY -lt -250) { $mark = 'v' }
-        $col = [byte]$s.Color
-        Write-At $x $y $mark $col 1
+        if ($s.Hull -le 0) { continue }
+        Draw-Blip $s.X $s.Y $s.Z
+    }
+    if ($null -ne $script:Bolts) {
+        foreach ($b in $script:Bolts) { Draw-Blip $b.X $b.Y $b.Z }
+    }
+    $n = $cw * $ch
+    if ($null -eq $script:ScanBuf -or $script:ScanBuf.Length -ne $n) {
+        $script:ScanBuf = New-Object 'char[]' $n
+        $script:ScanCol = New-Object 'byte[]' $n
+    }
+    for ($i = 0; $i -lt $n; $i++) { $script:ScanBuf[$i] = ' ' }
+    [Array]::Clear($script:ScanCol, 0, $n)
+    [EliteBraille.Raster]::Stamp($script:ScanDots, $dw, $script:ScanBuf, $script:ScanCol, $cw, 0, $ch, $script:Pri)
+    for ($y = 0; $y -lt $ch; $y++) {
+        $src = $y * $cw
+        $dst = ($oy + $y) * $script:W + $ox
+        for ($x = 0; $x -lt $cw; $x++) {
+            $cell = $script:ScanBuf[$src + $x]
+            if ($cell -ne ' ') {
+                $script:Buf[$dst + $x] = $cell
+                $script:Col[$dst + $x] = $script:ScanCol[$src + $x]
+            }
+        }
+    }
+}
+
+function Draw-Dashboard {
+    $hy = $script:HudY
+    $hh = $script:HudH
+    $rule = '+' + ('-' * ($script:W - 2)) + '+'
+    Write-At 0 $hy $rule 6 $script:W
+    if ($hh -ge 2) { Write-At 0 ($hy + $hh - 1) $rule 6 $script:W }
+    $top = $hy + 1
+    $body = $hh - 2
+    if ($body -lt 1) { return }
+
+    $clx = 0.0
+    $cly = 0.0
+    $clz = 1.0
+    $cwhat = 'PLN'
+    if (-not $script:Witch) {
+        Get-Arrow
+        $clx = $script:LocX
+        $cly = $script:LocY
+        $clz = $script:LocZ
+        $cwhat = $script:CompassWhat
+    }
+    $sp = Speed-Of $script:Vx $script:Vy $script:Vz
+    $cond = 'GREEN'
+    $condCol = [byte]10
+    $nearHost = $false
+    foreach ($s in $script:Ships) {
+        if ($s.Role -eq 'trader') { continue }
+        if ((Speed-Of ($s.X - $script:Px) ($s.Y - $script:Py) ($s.Z - $script:Pz)) -lt 8000) { $nearHost = $true }
+    }
+    if ($nearHost) { $cond = 'YELLOW'; $condCol = [byte]11 }
+    if ($script:HitFlash -gt 0 -or $script:Witch) { $cond = 'RED'; $condCol = [byte]9 }
+    if (-not $script:Witch -and (Speed-Of $script:Px $script:Py $script:Pz) -lt 1700) { $cond = 'GREEN'; $condCol = [byte]10 }
+    $critical = ($script:Hull -lt 28 -or $script:Energy -lt 20)
+    if ($critical) { $cond = 'RED'; $condCol = [byte]9 }
+    $alt = 0.0
+    if (-not $script:Witch) {
+        $pd = Speed-Of ($script:Px - $script:PlX) ($script:Py - $script:PlY) ($script:Pz - $script:PlZ)
+        $height = $pd - $script:PlR
+        if ($height -lt 0) { $height = 0 }
+        if ($height -lt 9000) { $alt = (1.0 - ($height / 9000.0)) * 100.0 }
+    }
+    $rightW = 20
+    $rightX = $script:W - $rightW - 2
+    $full = ($body -ge 9 -and $rightX -ge 36)
+    if ($full) {
+        for ($i = 0; $i -lt $body; $i++) {
+            Write-At 0 ($top + $i) '|' 6 1
+            Write-At ($script:W - 1) ($top + $i) '|' 6 1
+        }
+        Write-Gauge 2 ($top + 0) 'FS' (Bar $script:ShieldF $script:ShieldMax 8)
+        Write-Gauge 2 ($top + 1) 'AS' (Bar $script:ShieldA $script:ShieldMax 8)
+        Write-Gauge 2 ($top + 2) 'FU' (Bar $script:Fuel 7 8)
+        Write-Gauge 2 ($top + 3) 'CT' (Bar $script:Temp 100 8)
+        Write-Gauge 2 ($top + 4) 'LT' (Bar $script:Heat 100 8)
+        Write-Gauge 2 ($top + 5) 'AL' (Bar $alt 100 8)
+        Write-At 2 ($top + 6) 'MS' 7 2
+        $mcol = [byte]11
+        if ($script:MissileArm -eq 1) { $mcol = [byte]10 }
+        elseif ($script:MissileArm -eq 2) { $mcol = [byte]9 }
+        for ($i = 0; $i -lt 4; $i++) {
+            if ($i -lt $script:Missiles) { Write-At (5 + $i * 2) ($top + 6) '#' $mcol 1 }
+            else { Write-At (5 + $i * 2) ($top + 6) '.' 8 1 }
+        }
+        $mode = $script:ViewName[$script:View]
+        $modeCol = [byte]6
+        if ($script:JumpT -gt 0) {
+            $mode = 'J ' + [string]([int][Math]::Ceiling($script:JumpT))
+            $modeCol = [byte]11
+        }
+        elseif ($script:InTorus) { $mode = 'TORUS'; $modeCol = [byte]11 }
+        elseif ($script:CloakOn) { $mode = 'CLOAK'; $modeCol = [byte]13 }
+        elseif ($script:AutoDock) { $mode = 'AUTO'; $modeCol = [byte]14 }
+        Write-At 2 ($top + 7) $mode $modeCol 8
+
+        $art = @(
+            ' .---. ',
+            '/     \',
+            '|     |',
+            '\     /',
+            " '---' "
+        )
+        for ($i = 0; $i -lt 5; $i++) { Write-At $rightX ($top + $i) $art[$i] 7 7 }
+        if (-not $script:Witch) {
+            $px = 3 + [int]([Math]::Round($clx * 2.0))
+            $py = 2 - [int]([Math]::Round($cly * 1.0))
+            if ($px -lt 1) { $px = 1 }
+            if ($px -gt 5) { $px = 5 }
+            if ($py -lt 1) { $py = 1 }
+            if ($py -gt 3) { $py = 3 }
+            $mark = '*'
+            $markCol = [byte]15
+            if ($clz -lt 0) { $mark = 'o'; $markCol = [byte]8 }
+            Write-At ($rightX + $px) ($top + $py) $mark $markCol 1
+        }
+        if ($cwhat -eq 'STN' -and -not $script:Witch) { Write-At ($rightX + 8) ($top + 2) 'S' 11 1 }
+        else { Write-At ($rightX + 8) ($top + 2) '.' 8 1 }
+        if ($script:EcmT -gt 0) { Write-At ($rightX + 8) ($top + 3) 'E' 11 1 }
+        else { Write-At ($rightX + 8) ($top + 3) '.' 8 1 }
+        $lamp = $true
+        if ($critical -and (($script:Tick % 8) -lt 4)) { $lamp = $false }
+        if ($lamp) { Write-At ($rightX + 8) $top $cond $condCol 6 }
+        Write-Gauge $rightX ($top + 5) 'SP' (Bar $sp 320 8)
+        Write-At $rightX ($top + 6) 'RL' 7 2
+        Write-At ($rightX + 3) ($top + 6) (Center-Bar ($script:DialRoll / 2.4)) 9 5
+        Write-At $rightX ($top + 7) 'DC' 7 2
+        Write-At ($rightX + 3) ($top + 7) (Center-Bar ($script:DialPitch / 2.4)) 9 5
+        $bx = $rightX
+        for ($i = 0; $i -lt 4; $i++) {
+            $bank = $script:Energy - (25.0 * $i)
+            if ($bank -lt 0) { $bank = 0 }
+            if ($bank -gt 25) { $bank = 25 }
+            Write-At $bx ($top + 8) ([string]($i + 1)) 7 1
+            Write-At ($bx + 1) ($top + 8) (Bar $bank 25 3) 9 3
+            $bx += 5
+        }
+        $scanL = 16
+        $scanR = $rightX - 2
+        $gap = $scanR - $scanL + 1
+        $cw = $gap
+        if ($cw -gt 46) { $cw = 46 }
+        $ox = $scanL + [int](($gap - $cw) / 2)
+        Draw-Scanner $ox $top $cw $body
+    }
+    else {
+        Write-Gauge 1 $top 'FS' (Bar $script:ShieldF $script:ShieldMax 6)
+        Write-Gauge 12 $top 'AS' (Bar $script:ShieldA $script:ShieldMax 6)
+        if ($body -ge 2) {
+            Write-Gauge 1 ($top + 1) 'FU' (Bar $script:Fuel 7 6)
+            Write-Gauge 12 ($top + 1) 'SP' (Bar $sp 640 6)
+        }
+        if ($body -ge 3) {
+            Write-Gauge 1 ($top + 2) 'CT' (Bar $script:Temp 100 4)
+            Write-Gauge 10 ($top + 2) 'LT' (Bar $script:Heat 100 4)
+            Write-Gauge 19 ($top + 2) 'AL' (Bar $alt 100 4)
+            if (-not $critical -or (($script:Tick % 8) -ge 4)) { Write-At 28 ($top + 2) $cond $condCol 6 }
+        }
+        if ($body -ge 5) { Draw-Scanner 2 ($top + 3) ($script:W - 4) ($body - 3) }
     }
 }
 
@@ -2625,63 +2941,7 @@ function Draw-Flight {
     if ($script:Witch) { $title = "WITCH-SPACE   CMDR $($script:Name)   $(Get-RankName $script:Kills)" }
     Write-At 1 0 $title 14 $script:W
 
-    $sp = Speed-Of $script:Vx $script:Vy $script:Vz
-    $legal = 'Clean'
-    if ($script:Legal -gt 49) { $legal = 'Fugitive' }
-    elseif ($script:Legal -gt 0) { $legal = 'Offender' }
-    $cond = 'GREEN'
-    $condCol = [byte]10
-    $nearHost = $false
-    foreach ($s in $script:Ships) {
-        if ($s.Role -eq 'trader') { continue }
-        if ((Speed-Of ($s.X - $script:Px) ($s.Y - $script:Py) ($s.Z - $script:Pz)) -lt 8000) { $nearHost = $true }
-    }
-    if ($nearHost) { $cond = 'YELLOW'; $condCol = [byte]11 }
-    if ($script:HitFlash -gt 0 -or $script:Witch) { $cond = 'RED'; $condCol = [byte]9 }
-    if (-not $script:Witch -and (Speed-Of $script:Px $script:Py $script:Pz) -lt 1700) { $cond = 'GREEN'; $condCol = [byte]10 }
-
-    if ($script:Hull -lt 28 -or $script:Energy -lt 20) {
-        if (($script:Tick % 8) -lt 4) { $cond = 'RED'; $condCol = [byte]9 }
-    }
-    $hy = $script:HudY
-    Write-At 0 $hy ('-' * $script:W) 8 $script:W
-    $line = "SPD $(F0 $sp)   FUEL $(F1 $script:Fuel) LY   CR $($script:Cash)   LEGAL $legal"
-    Write-At 1 ($hy + 1) $line 7 ($script:W - 2)
-    $e1 = Bar ([Math]::Min(25, [Math]::Max(0, $script:Energy))) 25 3
-    $e2 = Bar ([Math]::Min(25, [Math]::Max(0, $script:Energy - 25))) 25 3
-    $e3 = Bar ([Math]::Min(25, [Math]::Max(0, $script:Energy - 50))) 25 3
-    $e4 = Bar ([Math]::Min(25, [Math]::Max(0, $script:Energy - 75))) 25 3
-    $bars = "HULL $(Bar $script:Hull $script:HullMax 6)  SHF $(Bar $script:ShieldF $script:ShieldMax 4)  SHA $(Bar $script:ShieldA $script:ShieldMax 4)  EN $e1 $e2 $e3 $e4"
-    Write-At 1 ($hy + 2) $bars 6 ($script:W - 2)
-    $kind = Laser-Kind
-    $arm = 'SAFE'
-    if ($script:MissileArm -eq 1) { $arm = 'ARM' }
-    elseif ($script:MissileArm -eq 2) { $arm = 'LOCK' }
-    $extra = "HEAT $(F0 $script:Heat)  TEMP $(F0 $script:Temp)  MSL $($script:Missiles) $arm  $($script:ViewName[$script:View]) $kind"
-    if ($script:JumpT -gt 0) { $extra += "  JUMP $([int][Math]::Ceiling($script:JumpT))" }
-    if ($script:InTorus) { $extra += '  TORUS' }
-    if ($script:CloakOn) { $extra += '  CLOAK' }
-    Write-At 1 ($hy + 3) $extra 6 ($script:W - 2)
-    Write-At 1 ($hy + 4) "COND $cond" $condCol 12
-    if ($script:Witch) { Write-At 16 ($hy + 4) 'STN  none' 5 20 }
-    else {
-        Get-Arrow
-        Write-At 16 ($hy + 4) "$($script:CompassWhat) $($script:CompassMark) $(Format-Km $script:StationDist) $($script:Arrow)" 11 32
-    }
-    $tname = 'none'
-    foreach ($s in $script:Ships) {
-        if ($s.Id -eq $script:TargetId) {
-            $td = Speed-Of ($s.X - $script:Px) ($s.Y - $script:Py) ($s.Z - $script:Pz)
-            $tname = "$($s.Type) $(Format-Km $td) H$(F0 $s.Hull)"
-        }
-    }
-    Write-At 1 ($hy + 5) "TGT $tname" 7 40
-    if ($script:AutoDock) { Write-At 42 ($hy + 5) 'AUTODOCK' 14 10 }
-    if ($script:W -ge 78) {
-        Write-At 1 ($hy + 6) 'Arrows turn  A/Z/X thrust  Space laser  1-4 view  Y torus  T/F/U missile' 8 ($script:W - 2)
-        Write-At 1 ($hy + 7) 'D dock  J/H jump  C chart  G galaxy  E ecm  W bomb  Q pod  V cloak  B heavy' 8 ($script:W - 2)
-    }
-    Draw-Scanner
+    Draw-Dashboard
     if ($script:MsgT -gt 0 -and $script:Msg.Length -gt 0) {
         Write-At 2 ($script:ViewY + $script:ViewH - 2) $script:Msg 11 ($script:W - 4)
     }
@@ -2923,7 +3183,7 @@ function Paint-Title {
         Write-Mid ($y + 1) 'H  how to fly' 15
         Write-Mid ($y + 2) 'Q  quit' 15
     }
-    Write-Mid ($script:H - 3) 'Window 80x30 or larger. Windows Terminal looks best.' 8
+    Write-Mid ($script:H - 3) 'The view follows the window. 80x30 is comfortable.' 8
 }
 
 function Read-Name {
@@ -3590,8 +3850,9 @@ function Invoke-SelfTest {
     $dump = Join-Path $env:TEMP 'elite-frame.txt'
     Dump-Frame $dump
     $text = Get-Content $dump -Raw
-    Check ($text.Contains('SPD')) 'hud speed'
-    Check ($text.Contains('FUEL')) 'hud fuel'
+    Check ($text.Contains('FS ')) 'hud shield'
+    Check ($text.Contains('FU ')) 'hud fuel'
+    Check ($text.Contains('SP ')) 'hud speed'
     Check ($text.Contains('+--')) 'cockpit corners'
     $nBraille = 0
     foreach ($ch in $script:Buf) {
@@ -3599,6 +3860,15 @@ function Invoke-SelfTest {
         if ($code -ge 0x2800 -and $code -le 0x28FF) { $nBraille++ }
     }
     Check ($nBraille -ge 10) "braille cells $nBraille"
+    $hudDots = 0
+    for ($y = $script:HudY; $y -lt $script:H; $y++) {
+        $row = $y * $script:W
+        for ($x = 0; $x -lt $script:W; $x++) {
+            $code = [int]$script:Buf[$row + $x]
+            if ($code -ge 0x2800 -and $code -le 0x28FF) { $hudDots++ }
+        }
+    }
+    Check ($hudDots -ge 12) "scanner cells $hudDots"
     $sample = New-Object 'byte[]' 16
     [EliteBraille.Raster]::Plot($sample, 4, 4, 0, 0, 14)
     [EliteBraille.Raster]::Plot($sample, 4, 4, 1, 0, 14)

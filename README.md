@@ -40,7 +40,7 @@ Cobra Mk III проходит перед станцией. / A Cobra Mk III cros
 
 Торговля идёт по семнадцати товарам. Рабы, наркотики и огнестрел на законных станциях не продают: при стыковке груз забирают и выписывают штраф. Топливо доливается только до полного бака, 2 CR за световой год.
 
-В полёте четыре вида, `1`–`4`, и стреляет лазер того борта, куда смотришь. Есть передний и задний щит, четыре банка энергии, перегрев лазера и температура кабины у солнца. Компас показывает `+`, если цель впереди, и `o`, если сзади: далеко он ведёт на планету, близко — на станцию.
+В полёте четыре вида, `1`–`4`, и стреляет лазер того борта, куда смотришь. Есть передний и задний щит, четыре банка энергии, перегрев лазера и температура кабины у солнца. Нижняя панель собрана как в оригинале: слева шкалы, в центре эллиптический сканер, справа компас. У цели на сканере палочка до твоей плоскости и яркая точка: выше, если она выше тебя, ниже, если ниже. Верх эллипса — впереди, низ — сзади. Точка компаса сплошная, когда цель впереди, и пустая, когда сзади. Далеко компас ведёт на планету, у станции загорается S.
 
 Верфь повторяет таблицу 48K: импульсный, лучевой, военный и шахтёрский лазеры, ECM, ковш, спасательная капсула, энергобомба, дополнительная энергия, стыковочный компьютер, галактический гипердрайв на один прыжок, большой трюм 35 т и ракеты до четырёх. Что можно купить, зависит от tech станции.
 
@@ -52,7 +52,7 @@ Cobra Mk III проходит перед станцией. / A Cobra Mk III cros
 
 ### Запуск
 
-Нужны Windows PowerShell 5.1 и моноширинный шрифт с Брайлем: Consolas или Cascadia Mono. Окно от 80×30, удобнее Windows Terminal.
+Нужны Windows PowerShell 5.1 и моноширинный шрифт с Брайлем: Consolas или Cascadia Mono. Картинка следует за окном, удобный размер от 80×30. Лучше всего смотрится в Windows Terminal.
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\Elite.ps1
@@ -93,7 +93,7 @@ You start at Lave, a rich agricultural dictatorship, in a Cobra Mk III with a fr
 
 Trade uses seventeen commodities. Lawful stations refuse slaves, narcotics and firearms, and they seize that cargo and fine you on docking. Fuel is sold only as a full tank, at 2 CR per light year.
 
-Flight has four views, `1` to `4`, and only the laser on the view you are looking through will fire. The ship has fore and aft shields, four energy banks, laser heat and a cabin temperature that rises near the sun. The compass is `+` when the target is ahead and `o` when it is behind. Far from the station it points at the planet. Close in, it points at the station.
+Flight has four views, `1` to `4`, and only the laser on the view you are looking through will fire. The ship has fore and aft shields, four energy banks, laser heat and a cabin temperature that rises near the sun. The bottom of the screen is the classic console: gauges on the left, an elliptical scanner in the centre, and the compass on the right. Each scanner contact is a stick down to your plane and a bright dot, above the plane when the ship is above you and below it when the ship is below. The top of the ellipse is ahead, the bottom is behind. The compass dot is solid when the target is ahead and hollow when it is behind. Far away it points at the planet. Near the station the S lamp lights.
 
 The shipyard follows the 48K list: pulse, beam, military and mining lasers, ECM, fuel scoops, an escape pod, an energy bomb, an extra energy unit, a docking computer, a one-jump galactic hyperdrive, a single cargo upgrade from 20 t to 35 t, and missiles up to four. A station only sells what its tech level allows.
 
@@ -105,7 +105,7 @@ Three missions turn up. A fuel leak fills the hold with refugees: leave by sun-s
 
 ### Run
 
-Windows PowerShell 5.1, and a monospace font that can draw Braille: Consolas or Cascadia Mono. Use a window of at least 80×30. Windows Terminal is the comfortable choice.
+Windows PowerShell 5.1, and a monospace font that can draw Braille: Consolas or Cascadia Mono. The picture follows the window. 80×30 is a comfortable size, and Windows Terminal is the best place to see it.
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\Elite.ps1

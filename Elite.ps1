@@ -141,6 +141,8 @@ $script:Goods = @(
 # N is the face plane: direction and distance from the centre. A names the two faces of each edge.
 # An edge is drawn when the eye is near enough and on the outside of one of those faces.
 # NS is the blueprint scale: up close the plane offset is |N|^2 / 2^NS, as in LL9.
+# US is the coordinate scale. The Coriolis vertices are 3.5 times the blueprint, so its
+# distance is divided back before the original 256-unit shift.
 # FV and EV are the original distances, on the 0-31 scale, past which a face is kept and an edge is dropped.
 # A Thargon keeps the canister edge list, the way the cassette blueprint does.
 $script:MeshSide = @{
@@ -541,6 +543,7 @@ $script:MeshStation = @{
         5, 10, 6, 10, 6, 11, 8, 11, 8, 12, 7, 12, 7, 9, 5, 9
     )
     NS = 0
+    US = 3.5
 }
 $script:MeshPort = @{
     V = [double[]]@(
@@ -552,6 +555,7 @@ $script:MeshPort = @{
     FV = [int[]]@(31)
     EV = [int[]]@(30, 30, 30, 30)
     NS = 0
+    US = 3.5
 }
 
 function F0([double]$n) { return ([Math]::Round($n)).ToString($script:Inv) }
@@ -2558,13 +2562,17 @@ function Draw-Mesh($mesh, [double]$ox, [double]$oy, [double]$oz, [double[]]$rm, 
         $qy = $dxs * $rm[3] + $dys * $rm[4] + $dzs * $rm[5]
         $qz = $dxs * $rm[6] + $dys * $rm[7] + $dzs * $rm[8]
         $ahead = $dxs * $c[6] + $dys * $c[7] + $dzs * $c[8]
-        $far = [int]($ahead / 256.0)
+        $us = 1.0
+        if ($mesh.ContainsKey('US')) { $us = [double]$mesh.US }
+        if ($us -lt 0.001) { $us = 1.0 }
+        $aheadUnit = $ahead / $us
+        $far = [int]($aheadUnit / 256.0)
         if ($far -lt 0) { $far = 0 }
         if ($far -gt 31) { $far = 31 }
         $ns = 0
         if ($mesh.ContainsKey('NS')) { $ns = [int]$mesh.NS }
         $shift = 0
-        $az = [Math]::Abs($ahead)
+        $az = [Math]::Abs($aheadUnit)
         while ($az -ge 256.0 -and $shift -lt 12) {
             $az *= 0.5
             $shift++
@@ -3335,7 +3343,7 @@ function Draw-ShowFrame([int]$index, [double[]]$spin) {
     $credits = @(
         @{ T = 'Thanks to David Braben and Ian Bell,'; C = [byte]11 },
         @{ T = 'who wrote the original Elite, 1984.'; C = [byte]11 },
-        @{ T = 'This remake was written by Dm.'; C = [byte]15 },
+        @{ T = 'This remake was written by DmNep.'; C = [byte]15 },
         @{ T = 'https://github.com/DmNep/elite'; C = [byte]14 },
         @{ T = 'Send wishes and suggestions there.'; C = [byte]7 },
         @{ T = 'Please star the repository.'; C = [byte]11 },
@@ -4170,7 +4178,7 @@ function Invoke-SelfTest {
             Check ($page.Contains('PRESENTATION')) 'presentation title'
             Check ($page.Contains('Cobra Mk III')) 'presentation ship'
             Check ($page.Contains('David Braben')) 'presentation thanks'
-            Check ($page.Contains('written by Dm')) 'presentation author'
+            Check ($page.Contains('written by DmNep')) 'presentation author'
             Check ($page.Contains('github.com/DmNep/elite')) 'presentation link'
             Check ($page.Contains('wishes and suggestions')) 'presentation wishes'
             Check ($page.Contains('Please star')) 'presentation star'
@@ -4178,6 +4186,24 @@ function Invoke-SelfTest {
     }
     Check ($wires -ge 8) "presentation wires $wires"
     Set-Frame 96 34
+    $script:Px = 0.0
+    $script:Py = 0.0
+    $script:Pz = 0.0
+    if ($null -eq $script:Cam) { $script:Cam = New-Object 'double[]' 9 }
+    Set-Identity $script:Cam
+    $slot = New-Object 'double[]' 9
+    Set-Facing $slot 0.0 0.0 -1.0
+    Yaw-Mesh $slot ((40.0 * [Math]::PI) / 180.0)
+    Draw-Mesh $script:MeshStation 0 0 2500 $slot 1 '#' 3
+    Check ($script:FaceVis[0]) 'station slot faces the camera'
+    Draw-Mesh $script:MeshPort 0 0 2500 $slot 1 '#' 14
+    Check ($script:FaceVis[0]) 'docking port faces the camera'
+    Set-Facing $slot 0.0 0.0 -1.0
+    Yaw-Mesh $slot ((80.0 * [Math]::PI) / 180.0)
+    Draw-Mesh $script:MeshStation 0 0 2500 $slot 1 '#' 3
+    Check (-not $script:FaceVis[0]) 'station slot hidden once swung past'
+    Draw-Mesh $script:MeshPort 0 0 2500 $slot 1 '#' 14
+    Check (-not $script:FaceVis[0]) 'docking port hidden once swung past'
 
     $script:Cash = 100
     $script:Hull = 40

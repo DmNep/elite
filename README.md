@@ -14,6 +14,14 @@ Adder на прицеле, планета справа. / An Adder in the sights
 
 ![Adder in the sights](docs/combat.png)
 
+Станция крутится вокруг щели, дальние рёбра скрыты. / The station rolls about the slot, and far edges stay hidden.
+
+![Coriolis station turning](docs/station.gif)
+
+Cobra Mk III проходит перед станцией. / A Cobra Mk III crosses in front of the station.
+
+![Cobra flying past the station](docs/flyby.gif)
+
 Станция Lave: 100 CR, бак 7 LY, три ракеты. / Lave station: 100 CR, 7 LY of fuel, three missiles.
 
 ![Docked at Lave](docs/docked.png)

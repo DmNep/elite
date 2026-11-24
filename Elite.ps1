@@ -25,6 +25,8 @@ $script:M = $null
 $script:Buf = $null
 $script:ViewTmp = $null
 $script:StM = $null
+$script:StSpin = 0.0
+$script:FaceVis = $null
 $script:BoltM = $null
 $script:Market = $null
 $script:NoSpawn = $false
@@ -127,7 +129,8 @@ $script:Goods = @(
 )
 
 # Wireframes follow the classic Elite blueprints: +X right, +Y up, +Z nose.
-# The Coriolis is scaled by 3.5 so the docking face sits 560 m out. The slot is drawn on its own.
+# The Coriolis is scaled by 3.5 so the docking face sits 560 m out. It rolls about that face.
+# N is a face normal. A names the two faces of each edge. An edge is drawn when one face points this way.
 # A Thargon keeps the canister edge list, the way the cassette blueprint does.
 $script:MeshSide = @{
     V = [double[]]@(
@@ -139,6 +142,15 @@ $script:MeshSide = @{
     E = [int[]]@(
         0, 1, 1, 2, 1, 4, 0, 4, 0, 3, 3, 4, 2, 4, 3, 5,
         2, 5, 1, 5, 0, 5, 6, 7, 7, 8, 6, 9, 8, 9
+    )
+    N = [double[]]@(
+        0, 32, 8, -12, 47, 6, 12, 47, 6, 
+        0, 0, -112, -12, -47, 6, 0, -32, 8, 
+        12, -47, 6
+    )
+    A = [int[]]@(
+        0, 5, 2, 6, 0, 2, 0, 1, 1, 4, 1, 3, 2, 3, 3, 4, 
+        3, 6, 5, 6, 4, 5, 3, 3, 3, 3, 3, 3, 3, 3
     )
 }
 $script:MeshViper = @{
@@ -153,6 +165,16 @@ $script:MeshViper = @{
         0, 3, 0, 1, 0, 2, 0, 4, 1, 7, 1, 8, 2, 5, 2, 6,
         7, 8, 5, 6, 4, 8, 4, 6, 3, 7, 3, 5, 9, 12, 9, 13,
         10, 11, 10, 14, 11, 14, 12, 13
+    )
+    N = [double[]]@(
+        0, 32, 0, -22, 33, 11, 22, 33, 11, 
+        -22, -33, 11, 22, -33, 11, 0, -32, 0, 
+        0, 0, -48
+    )
+    A = [int[]]@(
+        2, 4, 1, 2, 3, 4, 1, 3, 0, 2, 0, 1, 4, 5, 3, 5, 
+        0, 6, 5, 6, 1, 6, 3, 6, 2, 6, 6, 4, 6, 6, 6, 6, 
+        6, 6, 6, 6, 6, 6, 6, 6
     )
 }
 $script:MeshCobra = @{
@@ -175,6 +197,20 @@ $script:MeshCobra = @{
         18, 19, 14, 15, 16, 17, 15, 16, 14, 17, 13, 18, 12, 19, 2, 9,
         22, 24, 23, 24, 22, 23, 25, 26, 26, 27, 25, 27
     )
+    N = [double[]]@(
+        0, 62, 31, -18, 55, 16, 18, 55, 16, 
+        -16, 52, 14, 16, 52, 14, -14, 47, 0, 
+        14, 47, 0, -61, 102, 0, 61, 102, 0, 
+        0, 0, -80, -7, -42, 9, 0, -30, 6, 
+        7, -42, 9
+    )
+    A = [int[]]@(
+        0, 11, 4, 12, 3, 10, 7, 10, 8, 12, 8, 9, 6, 9, 5, 9, 
+        7, 9, 1, 5, 2, 6, 3, 7, 4, 8, 0, 1, 0, 2, 9, 10, 
+        9, 11, 9, 12, 10, 11, 11, 12, 1, 3, 2, 4, 0, 11, 9, 9, 
+        9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 5, 6, 
+        9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9
+    )
 }
 $script:MeshAdder = @{
     V = [double[]]@(
@@ -191,6 +227,19 @@ $script:MeshAdder = @{
         7, 12, 1, 13, 2, 13, 10, 11, 12, 13, 8, 10, 9, 11, 5, 12,
         4, 13, 14, 15, 15, 16, 16, 17, 17, 14
     )
+    N = [double[]]@(
+        0, 39, 10, 0, -39, 10, 69, 50, 13, 
+        69, -50, 13, 30, 52, 0, 30, -52, 0, 
+        0, 0, -160, 0, 0, -160, 0, 0, -160, 
+        -30, 52, 0, -30, -52, 0, -69, 50, 13, 
+        -69, -50, 13, 0, 28, 0, 0, -28, 0
+    )
+    A = [int[]]@(
+        1, 0, 3, 2, 5, 4, 6, 5, 14, 7, 10, 8, 10, 9, 12, 11, 
+        6, 4, 13, 7, 9, 8, 11, 0, 11, 9, 2, 0, 4, 2, 12, 1, 
+        12, 10, 3, 1, 5, 3, 13, 0, 14, 1, 13, 9, 13, 4, 14, 10, 
+        14, 5, 0, 0, 0, 0, 0, 0, 0, 0
+    )
 }
 $script:MeshKrait = @{
     V = [double[]]@(
@@ -205,6 +254,15 @@ $script:MeshKrait = @{
         0, 1, 0, 2, 0, 3, 0, 4, 1, 4, 4, 2, 2, 3, 3, 1,
         3, 5, 4, 6, 1, 2, 7, 10, 8, 10, 7, 9, 8, 9, 11, 13,
         13, 12, 12, 11, 14, 15, 15, 16, 16, 14
+    )
+    N = [double[]]@(
+        3, 24, 3, 3, -24, 3, -3, -24, 3, 
+        -3, 24, 3, 38, 0, -77, -38, 0, -77
+    )
+    A = [int[]]@(
+        3, 0, 2, 1, 1, 0, 3, 2, 5, 3, 5, 2, 4, 1, 4, 0, 
+        1, 0, 3, 2, 5, 4, 0, 0, 0, 0, 3, 3, 3, 3, 4, 4, 
+        4, 4, 4, 4, 5, 5, 5, 5, 5, 5
     )
 }
 $script:MeshAsp = @{
@@ -223,6 +281,18 @@ $script:MeshAsp = @{
         10, 12, 11, 12, 10, 11, 6, 11, 9, 11, 3, 10, 8, 10, 13, 15,
         15, 14, 14, 16, 16, 13, 18, 17
     )
+    N = [double[]]@(
+        0, -35, 5, 8, -38, -7, -8, -38, -7, 
+        0, 24, -1, 0, 43, 19, -6, 28, -2, 
+        6, 28, -2, 59, -64, 31, -59, -64, 31, 
+        80, 46, 50, -80, 46, 50, 0, 0, -90
+    )
+    A = [int[]]@(
+        2, 1, 1, 0, 2, 0, 11, 1, 6, 1, 9, 7, 4, 0, 10, 8, 
+        5, 2, 11, 2, 7, 1, 7, 0, 8, 2, 8, 0, 11, 6, 11, 5, 
+        6, 3, 5, 3, 4, 3, 10, 5, 10, 4, 9, 6, 9, 4, 11, 11, 
+        11, 11, 11, 11, 11, 11, 4, 0
+    )
 }
 $script:MeshFdl = @{
     V = [double[]]@(
@@ -240,6 +310,18 @@ $script:MeshFdl = @{
         3, 7, 4, 8, 10, 11, 11, 12, 10, 12, 13, 14, 14, 15, 13, 15,
         16, 17, 16, 18, 17, 18
     )
+    N = [double[]]@(
+        0, 24, 6, -68, 0, 24, -63, 0, -37, 
+        0, 0, -104, 63, 0, -37, 68, 0, 24, 
+        -12, 46, -19, 0, 45, -22, 12, 46, -19, 
+        0, -28, 0
+    )
+    A = [int[]]@(
+        9, 1, 9, 2, 9, 3, 9, 4, 9, 5, 1, 0, 6, 2, 7, 3, 
+        8, 4, 5, 0, 6, 0, 7, 6, 8, 7, 8, 0, 2, 1, 3, 2, 
+        4, 3, 5, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+        9, 9, 9, 9, 9, 9
+    )
 }
 $script:MeshPython = @{
     V = [double[]]@(
@@ -253,6 +335,19 @@ $script:MeshPython = @{
         3, 8, 2, 9, 3, 4, 3, 9, 3, 5, 3, 10, 2, 5, 2, 10,
         2, 7, 3, 6, 5, 6, 5, 7, 7, 10, 6, 10, 4, 5, 9, 10,
         1, 4, 8, 9
+    )
+    N = [double[]]@(
+        -27, 40, 11, 27, 40, 11, -27, -40, 11, 
+        27, -40, 11, -19, 38, 0, 19, 38, 0, 
+        -19, -38, 0, 19, -38, 0, -25, 37, -11, 
+        25, 37, -11, 25, -37, -11, -25, -37, -11, 
+        0, 0, -112
+    )
+    A = [int[]]@(
+        2, 3, 0, 2, 1, 3, 0, 1, 9, 5, 1, 5, 7, 3, 0, 4, 
+        2, 6, 7, 10, 4, 8, 6, 11, 8, 8, 11, 11, 9, 9, 10, 10, 
+        9, 10, 8, 11, 8, 12, 9, 12, 12, 10, 11, 12, 8, 9, 10, 11, 
+        4, 5, 6, 7
     )
 }
 $script:MeshThargoid = @{
@@ -271,6 +366,18 @@ $script:MeshThargoid = @{
         8, 15, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13, 14, 14, 15,
         16, 17, 18, 19
     )
+    N = [double[]]@(
+        103, -60, 25, 103, -60, -25, 103, -25, -60, 
+        103, 25, -60, 64, 0, 0, 103, 60, -25, 
+        103, 60, 25, 103, 25, 60, 103, -25, 60, 
+        -48, 0, 0
+    )
+    A = [int[]]@(
+        4, 8, 0, 4, 1, 4, 2, 4, 3, 4, 4, 5, 4, 6, 4, 7, 
+        0, 8, 0, 1, 1, 2, 2, 3, 3, 5, 5, 6, 6, 7, 7, 8, 
+        8, 9, 0, 9, 1, 9, 2, 9, 3, 9, 5, 9, 6, 9, 7, 9, 
+        9, 9, 9, 9
+    )
 }
 $script:MeshThargon = @{
     V = [double[]]@(
@@ -282,6 +389,15 @@ $script:MeshThargon = @{
     E = [int[]]@(
         0, 1, 1, 2, 2, 3, 3, 4, 0, 4, 0, 5, 1, 6, 2, 7,
         3, 8, 4, 9, 5, 6, 6, 7, 7, 8, 8, 9, 9, 5
+    )
+    N = [double[]]@(
+        -36, 0, 0, 20, -5, 7, 46, -42, -14, 
+        36, 0, -104, 46, 42, -14, 20, 5, 7, 
+        36, 0, 0
+    )
+    A = [int[]]@(
+        0, 1, 0, 2, 0, 3, 0, 4, 0, 5, 1, 5, 1, 2, 2, 3, 
+        3, 4, 4, 5, 1, 6, 2, 6, 3, 6, 4, 6, 5, 6
     )
 }
 $script:MeshRock = @{
@@ -295,6 +411,18 @@ $script:MeshRock = @{
         5, 6, 0, 5, 3, 5, 0, 6, 4, 5, 1, 8, 1, 7, 0, 7,
         4, 7, 3, 7, 3, 8, 2, 8, 7, 8
     )
+    N = [double[]]@(
+        9, 66, 81, 9, -66, 81, -72, 64, 31, 
+        -64, -73, 47, 45, -79, 65, 135, 15, 35, 
+        38, 76, 70, -66, 59, -39, -67, -15, -80, 
+        66, -14, -75, -70, -80, -40, 58, -102, -51, 
+        81, 9, -67, 47, 94, -63
+    )
+    A = [int[]]@(
+        2, 7, 6, 13, 5, 12, 4, 11, 3, 10, 2, 3, 1, 3, 1, 4, 
+        0, 1, 0, 6, 4, 5, 0, 2, 5, 6, 8, 10, 7, 8, 7, 13, 
+        12, 13, 9, 12, 9, 11, 10, 11, 8, 9
+    )
 }
 $script:MeshCan = @{
     V = [double[]]@(
@@ -306,6 +434,15 @@ $script:MeshCan = @{
     E = [int[]]@(
         0, 1, 1, 2, 2, 3, 3, 4, 0, 4, 0, 5, 1, 6, 2, 7,
         3, 8, 4, 9, 5, 6, 6, 7, 7, 8, 8, 9, 9, 5
+    )
+    N = [double[]]@(
+        96, 0, 0, 0, 41, 30, 0, -18, 48, 
+        0, -51, 0, 0, -18, -48, 0, 41, -30, 
+        -96, 0, 0
+    )
+    A = [int[]]@(
+        0, 1, 0, 2, 0, 3, 0, 4, 0, 5, 1, 5, 1, 2, 2, 3, 
+        3, 4, 4, 5, 1, 6, 2, 6, 3, 6, 4, 6, 5, 6
     )
 }
 $script:MeshMissile = @{
@@ -322,6 +459,16 @@ $script:MeshMissile = @{
         2, 5, 1, 6, 4, 7, 3, 8, 7, 8, 5, 8, 5, 6, 6, 7,
         6, 10, 5, 9, 8, 12, 7, 11, 9, 15, 10, 16, 12, 13, 11, 14
     )
+    N = [double[]]@(
+        -64, 0, 16, 0, -64, 16, 64, 0, 16, 
+        0, 64, 16, 32, 0, 0, 0, -32, 0, 
+        -32, 0, 0, 0, 32, 0, 0, 0, -176
+    )
+    A = [int[]]@(
+        1, 2, 2, 3, 0, 3, 0, 1, 4, 2, 1, 5, 0, 6, 3, 7, 
+        4, 7, 4, 5, 5, 6, 6, 7, 6, 8, 7, 8, 4, 8, 5, 8, 
+        5, 8, 7, 8, 7, 8, 5, 8, 4, 7, 4, 5, 6, 7, 5, 6
+    )
 }
 $script:MeshStation = @{
     V = [double[]]@(
@@ -337,12 +484,26 @@ $script:MeshStation = @{
         1, 6, 2, 6, 2, 7, 3, 7, 8, 11, 8, 9, 9, 10, 10, 11,
         4, 11, 4, 8, 5, 8, 5, 9, 6, 9, 6, 10, 7, 10, 7, 11
     )
+    N = [double[]]@(
+        0, 0, 160, 107, -107, 107, 107, 107, 107, 
+        -107, 107, 107, -107, -107, 107, 0, -160, 0, 
+        160, 0, 0, -160, 0, 0, 0, 160, 0, 
+        -107, -107, -107, 107, -107, -107, 107, 107, -107, 
+        -107, 107, -107, 0, 0, -160
+    )
+    A = [int[]]@(
+        0, 1, 0, 2, 0, 3, 0, 4, 1, 5, 1, 6, 2, 6, 2, 8, 
+        3, 8, 3, 7, 4, 7, 4, 5, 10, 13, 11, 13, 12, 13, 9, 13, 
+        5, 10, 6, 10, 6, 11, 8, 11, 8, 12, 7, 12, 7, 9, 5, 9
+    )
 }
 $script:MeshPort = @{
     V = [double[]]@(
         35, -105, 560, 35, 105, 560, -35, 105, 560, -35, -105, 560
     )
     E = [int[]]@(0, 1, 1, 2, 2, 3, 3, 0)
+    N = [double[]]@(0, 0, 1)
+    A = [int[]]@(0, 0, 0, 0, 0, 0, 0, 0)
 }
 
 function F0([double]$n) { return ([Math]::Round($n)).ToString($script:Inv) }
@@ -1081,6 +1242,7 @@ function Enter-Space([string]$mode) {
     $script:SuZ = -[Math]::Sin($ang + 0.6) * 46000.0
     $script:SuR = 5600.0
     $script:StAngle = ($script:Day * 0.55 + ($sys.Seed % 20) * 0.1)
+    $script:StSpin = 0.0
     $stars = 110
     $script:StarN = $stars
     $script:Stars = New-Object 'double[]' ($stars * 3)
@@ -1849,7 +2011,7 @@ function Update-Flight([double]$dt) {
     if ($script:Dead) { return 'dead' }
     if ($dt -gt 0.12) { $dt = 0.12 }
     if ($dt -lt 0.001) { $dt = 0.001 }
-    $script:StAngle += $dt * 0.09
+    $script:StSpin += $dt * 0.09
     $script:Cool -= $dt
     if ($script:Cool -lt 0) { $script:Cool = 0 }
     $script:LaserT -= $dt
@@ -1901,7 +2063,10 @@ function Update-Flight([double]$dt) {
         Get-Steer $script:M (($script:Ex * $aimR) - $script:Px) (0 - $script:Py) (($script:Ez * $aimR) - $script:Pz)
         $pitch = $script:StPitch
         $roll = $script:StRoll
-        if ($dist -lt 1800) { $roll += $script:M[1] * 1.8 }
+        if ($dist -lt 1800) {
+            $roll += $script:M[1] * 1.8
+            if ($script:M[4] -lt 0.45) { $roll += 1.5 }
+        }
         $sp = Speed-Of $script:Vx $script:Vy $script:Vz
         $desired = 90.0
         if ($dist -lt 2200) { $desired = 48 }
@@ -2251,6 +2416,8 @@ function Draw-Mesh($mesh, [double]$ox, [double]$oy, [double]$oz, [double[]]$rm, 
     if ($null -eq $script:ViewTmp -or $script:ViewTmp.Length -lt ($n * 3)) {
         $script:ViewTmp = New-Object 'double[]' ($n * 3)
     }
+    $c = $script:Cam
+    if ($null -eq $c) { $c = $script:M }
     for ($i = 0; $i -lt $n; $i++) {
         $lx = $verts[$i * 3] * $scale
         $ly = $verts[$i * 3 + 1] * $scale
@@ -2259,13 +2426,37 @@ function Draw-Mesh($mesh, [double]$ox, [double]$oy, [double]$oz, [double[]]$rm, 
         $wy = $oy + $lx * $rm[1] + $ly * $rm[4] + $lz * $rm[7]
         $wz = $oz + $lx * $rm[2] + $ly * $rm[5] + $lz * $rm[8]
         $dx = $wx - $script:Px; $dy = $wy - $script:Py; $dz = $wz - $script:Pz
-        $c = $script:Cam
-        if ($null -eq $c) { $c = $script:M }
         $script:ViewTmp[$i * 3] = $dx * $c[0] + $dy * $c[1] + $dz * $c[2]
         $script:ViewTmp[$i * 3 + 1] = $dx * $c[3] + $dy * $c[4] + $dz * $c[5]
         $script:ViewTmp[$i * 3 + 2] = $dx * $c[6] + $dy * $c[7] + $dz * $c[8]
     }
+    $vis = $null
+    if ($mesh.ContainsKey('N') -and $mesh.ContainsKey('A')) {
+        $norms = $mesh.N
+        $nf = [int]($norms.Length / 3)
+        if ($null -eq $script:FaceVis -or $script:FaceVis.Length -lt $nf) {
+            $script:FaceVis = New-Object 'bool[]' $nf
+        }
+        $vis = $script:FaceVis
+        for ($i = 0; $i -lt $nf; $i++) {
+            $nx = $norms[$i * 3]; $ny = $norms[$i * 3 + 1]; $nz = $norms[$i * 3 + 2]
+            $nwx = $nx * $rm[0] + $ny * $rm[3] + $nz * $rm[6]
+            $nwy = $nx * $rm[1] + $ny * $rm[4] + $nz * $rm[7]
+            $nwz = $nx * $rm[2] + $ny * $rm[5] + $nz * $rm[8]
+            $vz = $nwx * $c[6] + $nwy * $c[7] + $nwz * $c[8]
+            $vis[$i] = ($vz -lt 0)
+        }
+    }
+    $adj = $null
+    if ($null -ne $vis) { $adj = $mesh.A }
     for ($e = 0; $e -lt $edges.Length; $e += 2) {
+        if ($null -ne $vis) {
+            $f1 = $adj[$e]; $f2 = $adj[$e + 1]
+            $show = $false
+            if ($f1 -ge 0 -and $f1 -lt $vis.Length -and $vis[$f1]) { $show = $true }
+            elseif ($f2 -ge 0 -and $f2 -lt $vis.Length -and $f2 -ne $f1 -and $vis[$f2]) { $show = $true }
+            if (-not $show) { continue }
+        }
         $a = $edges[$e]; $b = $edges[$e + 1]
         Draw-ViewLine $script:ViewTmp[$a * 3] $script:ViewTmp[$a * 3 + 1] $script:ViewTmp[$a * 3 + 2] `
             $script:ViewTmp[$b * 3] $script:ViewTmp[$b * 3 + 1] $script:ViewTmp[$b * 3 + 2] $ch $color
@@ -2382,10 +2573,11 @@ function Draw-Flight {
         Draw-Disc $script:PlX $script:PlY $script:PlZ $script:PlR 'o' 2
         Station-Entrance
         if ($null -eq $script:StM) { $script:StM = New-Object 'double[]' 9 }
-        $c = [Math]::Cos($script:StAngle); $s = [Math]::Sin($script:StAngle)
-        $script:StM[0] = $c;  $script:StM[1] = 0; $script:StM[2] = -$s
-        $script:StM[3] = 0;   $script:StM[4] = 1; $script:StM[5] = 0
-        $script:StM[6] = $s;  $script:StM[7] = 0; $script:StM[8] = $c
+        $ch = [Math]::Cos($script:StAngle); $sh = [Math]::Sin($script:StAngle)
+        $cp = [Math]::Cos($script:StSpin); $spn = [Math]::Sin($script:StSpin)
+        $script:StM[0] = $cp * $ch;  $script:StM[1] = $spn;       $script:StM[2] = -$cp * $sh
+        $script:StM[3] = -$spn * $ch; $script:StM[4] = $cp;        $script:StM[5] = $spn * $sh
+        $script:StM[6] = $sh;         $script:StM[7] = 0;          $script:StM[8] = $ch
         Draw-Mesh $script:MeshStation 0 0 0 $script:StM 1 '#' 3
         Draw-Mesh $script:MeshPort 0 0 0 $script:StM 1 '#' 14
     }

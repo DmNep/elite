@@ -31,6 +31,37 @@ $script:KeyPrev = @{}
 $script:QuietPresent = $false
 $script:Dots = $null
 $script:Pri = $null
+$script:Cam = $null
+$script:View = 0
+$script:Laser = @('pulse', 'none', 'none', 'none')
+$script:ShieldF = 100.0
+$script:ShieldA = 100.0
+$script:Heat = 0.0
+$script:Temp = 0.0
+$script:MissileArm = 0
+$script:ECM = $false
+$script:Scoops = $false
+$script:EscapePod = $false
+$script:Bomb = 0
+$script:EnergyUnit = $false
+$script:GalCharges = 0
+$script:HasCloak = $false
+$script:CloakOn = $false
+$script:Heavy = 0
+$script:Nova = 0
+$script:NovaSys = -1
+$script:Cloak = 0
+$script:Base = 0
+$script:FitMount = 0
+$script:Rare = 'Krait'
+$script:InTorus = $false
+$script:JumpT = 0.0
+$script:Tick = 0
+$script:Pending = New-Object System.Collections.Generic.List[object]
+$script:Escaping = $false
+$script:Energy = 100.0
+$script:EnergyMax = 100.0
+$script:ViewName = @('FRONT', 'REAR', 'LEFT', 'RIGHT')
 
 # Palette matches ANSI 30-37 then 90-97.
 # 0 black  1 red  2 green  3 yellow  4 blue  5 magenta  6 cyan  7 gray
@@ -59,9 +90,9 @@ $script:GovName = @(
     'Communist', 'Confederacy', 'Democracy', 'Corporate'
 )
 $script:Ranks = @(
-    @(0, 'Harmless'), @(2, 'Mostly Harmless'), @(6, 'Poor'), @(12, 'Average'),
-    @(24, 'Above Average'), @(48, 'Competent'), @(100, 'Dangerous'),
-    @(200, 'Deadly'), @(400, 'Elite')
+    @(0, 'Harmless'), @(8, 'Mostly Harmless'), @(16, 'Poor'), @(32, 'Average'),
+    @(64, 'Above Average'), @(128, 'Competent'), @(512, 'Dangerous'),
+    @(2560, 'Deadly'), @(6400, 'Elite')
 )
 $script:Syl = @(
     'ar','on','en','is','or','an','us','er','in','al','es','ed','ra','le','ve','ti',
@@ -73,22 +104,25 @@ $script:Features = @(
     'gem mines', 'dusty plateaus', 'coral atolls', 'frozen poles',
     'busy freeports', 'silent monasteries', 'acid lakes', 'crystal caverns'
 )
+# Averages follow the 48K flight manual. B is the mid-economy price.
 $script:Goods = @(
-    @{ N = 'Food';         B = 16;  K = -3; T = 0;  Il = $false },
-    @{ N = 'Textiles';     B = 24;  K = -2; T = 0;  Il = $false },
-    @{ N = 'Radioactives'; B = 28;  K = -1; T = 0;  Il = $false },
-    @{ N = 'Spirits';      B = 32;  K = -2; T = 0;  Il = $false },
-    @{ N = 'Luxuries';     B = 44;  K = -2; T = 0;  Il = $false },
-    @{ N = 'Minerals';     B = 22;  K = -1; T = 1;  Il = $false },
-    @{ N = 'Gold';         B = 74;  K = 1;  T = 2;  Il = $false },
-    @{ N = 'Platinum';     B = 98;  K = 1;  T = 3;  Il = $false },
-    @{ N = 'Gemstones';    B = 86;  K = 2;  T = 2;  Il = $false },
-    @{ N = 'Alloys';       B = 40;  K = 3;  T = 4;  Il = $false },
-    @{ N = 'Firearms';     B = 52;  K = 4;  T = 5;  Il = $true  },
-    @{ N = 'Narcotics';    B = 70;  K = -4; T = 0;  Il = $true  },
-    @{ N = 'Computers';    B = 96;  K = 7;  T = 8;  Il = $false },
-    @{ N = 'Machinery';    B = 56;  K = 5;  T = 5;  Il = $false },
-    @{ N = 'Robots';       B = 120; K = 8;  T = 10; Il = $false }
+    @{ N = 'Food';         B = 4;   K = -1; T = 0; Il = $false },
+    @{ N = 'Textiles';     B = 6;   K = -1; T = 0; Il = $false },
+    @{ N = 'Radioactives'; B = 21;  K = -2; T = 0; Il = $false },
+    @{ N = 'Slaves';       B = 8;   K = -1; T = 0; Il = $true  },
+    @{ N = 'Liquor';       B = 25;  K = -1; T = 0; Il = $false },
+    @{ N = 'Luxuries';     B = 91;  K = -2; T = 0; Il = $false },
+    @{ N = 'Narcotics';    B = 115; K = -4; T = 0; Il = $true  },
+    @{ N = 'Computers';    B = 84;  K = 6;  T = 0; Il = $false },
+    @{ N = 'Machinery';    B = 56;  K = 4;  T = 0; Il = $false },
+    @{ N = 'Alloys';       B = 33;  K = 3;  T = 0; Il = $false },
+    @{ N = 'Firearms';     B = 70;  K = 3;  T = 0; Il = $true  },
+    @{ N = 'Furs';         B = 56;  K = -2; T = 0; Il = $false },
+    @{ N = 'Minerals';     B = 8;   K = -1; T = 0; Il = $false },
+    @{ N = 'Gold';         B = 37;  K = 1;  T = 0; Il = $false },
+    @{ N = 'Platinum';     B = 65;  K = 1;  T = 0; Il = $false },
+    @{ N = 'Gem-Stones';   B = 16;  K = 2;  T = 0; Il = $false },
+    @{ N = 'Alien Items';  B = 27;  K = 0;  T = 0; Il = $false }
 )
 
 # Local ship space: +Z forward, +Y up, +X right. Units are metres.
@@ -139,6 +173,19 @@ $script:MeshPort = @{
         -150, -70, 620,  150, -70, 620,  150, 70, 620,  -150, 70, 620
     )
     E = [int[]]@(0,1, 1,2, 2,3, 3,0, 0,2, 1,3)
+}
+$script:MeshRock = @{
+    V = [double[]]@(
+        0, 28, 8,  -26, 6, -8,  18, 8, -22,  8, -24, 6,  -14, -6, 20,  22, -4, 12
+    )
+    E = [int[]]@(0,1, 0,2, 0,4, 0,5, 1,2, 1,3, 2,3, 2,5, 3,4, 4,5, 1,4, 3,5)
+}
+$script:MeshCan = @{
+    V = [double[]]@(
+        -12, -12, 12,  12, -12, 12,  12, 12, 12,  -12, 12, 12,
+        -12, -12, -12,  12, -12, -12,  12, 12, -12,  -12, 12, -12
+    )
+    E = [int[]]@(0,1, 1,2, 2,3, 3,0, 4,5, 5,6, 6,7, 7,4, 0,4, 1,5, 2,6, 3,7)
 }
 
 function F0([double]$n) { return ([Math]::Round($n)).ToString($script:Inv) }
@@ -355,6 +402,47 @@ function Say([string]$text) {
     $script:MsgT = 5.0
 }
 
+function Note($obj, [string]$name, $fallback) {
+    if ($null -eq $obj) { return $fallback }
+    $p = $obj.PSObject.Properties[$name]
+    if ($null -eq $p -or $null -eq $p.Value) { return $fallback }
+    return $p.Value
+}
+
+function Test-Contraband([string]$name) {
+    return $name -eq 'Slaves' -or $name -eq 'Narcotics' -or $name -eq 'Firearms'
+}
+
+function Clear-Cargo {
+    $script:Cargo = @{}
+    $script:CargoUsed = 0
+}
+
+function Sync-LaserFlag {
+    $front = 'pulse'
+    if ($null -ne $script:Laser -and $script:Laser.Count -gt 0) { $front = [string]$script:Laser[0] }
+    $script:Beam = ($front -eq 'beam')
+}
+
+function Laser-Worth([string]$kind) {
+    switch ($kind) {
+        'pulse' { return 400 }
+        'beam' { return 1000 }
+        'military' { return 6000 }
+        'mining' { return 800 }
+        default { return 0 }
+    }
+}
+
+function Laser-Kind {
+    $kind = 'none'
+    if ($null -ne $script:Laser -and $script:View -ge 0 -and $script:View -lt $script:Laser.Count) {
+        $kind = [string]$script:Laser[$script:View]
+    }
+    if ($kind -eq 'none' -and $script:View -eq 0 -and $script:Beam) { $kind = 'beam' }
+    return $kind
+}
+
 function Reset-Commander([string]$name, [int]$seed) {
     Build-Galaxy $seed
     $script:Name = $name
@@ -367,12 +455,35 @@ function Reset-Commander([string]$name, [int]$seed) {
     $script:HullMax = 100.0
     $script:Shield = 100.0
     $script:ShieldMax = 100.0
+    $script:ShieldF = 100.0
+    $script:ShieldA = 100.0
     $script:Energy = 100.0
     $script:EnergyMax = 100.0
     $script:Beam = $false
-    $script:Missiles = 0
+    $script:Laser = @('pulse', 'none', 'none', 'none')
+    $script:Missiles = 3
+    $script:MissileArm = 0
     $script:DockComp = $false
     $script:GalDrive = $false
+    $script:GalCharges = 0
+    $script:ECM = $false
+    $script:Scoops = $false
+    $script:EscapePod = $false
+    $script:Bomb = 0
+    $script:EnergyUnit = $false
+    $script:HasCloak = $false
+    $script:CloakOn = $false
+    $script:Heavy = 0
+    $script:Nova = 0
+    $script:NovaSys = -1
+    $script:Cloak = 0
+    $script:Base = 0
+    $script:View = 0
+    $script:FitMount = 0
+    $script:Heat = 0.0
+    $script:Temp = 0.0
+    $script:JumpT = 0.0
+    $script:Rare = $(if (($seed -band 1) -eq 0) { 'Krait' } else { 'Adder' })
     $script:Kills = 0
     $script:Legal = 0
     $script:Day = 0
@@ -382,6 +493,7 @@ function Reset-Commander([string]$name, [int]$seed) {
     $script:MarketDay = -1
     $script:MarketSys = -1
     $script:Sys = Find-Home
+    Set-Lave
     $script:Msg = ''
     $script:MsgT = 0
     $script:Px = 0.0
@@ -430,6 +542,20 @@ function Find-Home {
     return 0
 }
 
+function Set-Lave {
+    $h = $script:Sys
+    for ($i = 0; $i -lt 256; $i++) {
+        if ($i -ne $h -and $script:Systems[$i].Name -eq 'Lave') {
+            $script:Systems[$i].Name = 'Lavea'
+        }
+    }
+    $lave = $script:Systems[$h]
+    $lave.Name = 'Lave'
+    $lave.Gov = 3
+    $lave.Eco = 5
+    $lave.Tech = 5
+}
+
 function Save-Commander {
     if (-not (Test-Path $script:SaveDir)) { New-Item -ItemType Directory -Path $script:SaveDir | Out-Null }
     $cargo = @()
@@ -437,7 +563,7 @@ function Save-Commander {
         $cargo += @{ N = [string]$k; Q = [int]$script:Cargo[$k] }
     }
     $data = @{
-        Version = 1
+        Version = 2
         Name = $script:Name
         Cash = [int]$script:Cash
         Fuel = [double]$script:Fuel
@@ -446,9 +572,23 @@ function Save-Commander {
         Hull = [double]$script:Hull
         ShieldMax = [double]$script:ShieldMax
         Beam = [bool]$script:Beam
+        Lasers = ($script:Laser -join ',')
         Missiles = [int]$script:Missiles
         DockComp = [bool]$script:DockComp
-        GalDrive = [bool]$script:GalDrive
+        GalDrive = [bool]($script:GalCharges -gt 0)
+        GalCharges = [int]$script:GalCharges
+        ECM = [bool]$script:ECM
+        Scoops = [bool]$script:Scoops
+        EscapePod = [bool]$script:EscapePod
+        Bomb = [int]$script:Bomb
+        EnergyUnit = [bool]$script:EnergyUnit
+        HasCloak = [bool]$script:HasCloak
+        Heavy = [int]$script:Heavy
+        Nova = [int]$script:Nova
+        NovaSys = [int]$script:NovaSys
+        Cloak = [int]$script:Cloak
+        Base = [int]$script:Base
+        Rare = [string]$script:Rare
         Kills = [int]$script:Kills
         Legal = [int]$script:Legal
         Day = [int]$script:Day
@@ -485,9 +625,42 @@ function Load-Commander {
     $script:EnergyMax = 100.0
     $script:Energy = 100.0
     $script:Beam = [bool]$data.Beam
+    $laserText = [string](Note $data 'Lasers' '')
+    if ($laserText.Length -gt 0) {
+        $script:Laser = @($laserText.Split(','))
+    }
+    elseif ($script:Beam) {
+        $script:Laser = @('beam', 'none', 'none', 'none')
+    }
+    else {
+        $script:Laser = @('pulse', 'none', 'none', 'none')
+    }
+    while ($script:Laser.Count -lt 4) { $script:Laser += 'none' }
     $script:Missiles = [int]$data.Missiles
+    $script:MissileArm = 0
     $script:DockComp = [bool]$data.DockComp
-    $script:GalDrive = [bool]$data.GalDrive
+    $script:GalCharges = [int](Note $data 'GalCharges' $(if ([bool]$data.GalDrive) { 1 } else { 0 }))
+    $script:GalDrive = ($script:GalCharges -gt 0)
+    $script:ECM = [bool](Note $data 'ECM' $false)
+    $script:Scoops = [bool](Note $data 'Scoops' $false)
+    $script:EscapePod = [bool](Note $data 'EscapePod' $false)
+    $script:Bomb = [int](Note $data 'Bomb' 0)
+    $script:EnergyUnit = [bool](Note $data 'EnergyUnit' $false)
+    $script:HasCloak = [bool](Note $data 'HasCloak' $false)
+    $script:CloakOn = $false
+    $script:Heavy = [int](Note $data 'Heavy' 0)
+    $script:Nova = [int](Note $data 'Nova' 0)
+    $script:NovaSys = [int](Note $data 'NovaSys' -1)
+    $script:Cloak = [int](Note $data 'Cloak' 0)
+    $script:Base = [int](Note $data 'Base' 0)
+    $script:Rare = [string](Note $data 'Rare' 'Krait')
+    $script:View = 0
+    $script:FitMount = 0
+    $script:Heat = 0.0
+    $script:Temp = 0.0
+    $script:JumpT = 0.0
+    $script:ShieldF = $script:ShieldMax
+    $script:ShieldA = $script:ShieldMax
     $script:Kills = [int]$data.Kills
     $script:Legal = [int]$data.Legal
     $script:Day = [int]$data.Day
@@ -602,23 +775,58 @@ function Get-Steer([double[]]$m, [double]$dx, [double]$dy, [double]$dz) {
 
 function New-Ship([string]$type, [string]$role, [double]$x, [double]$y, [double]$z) {
     $hull = 22.0; $dmg = 5.0; $maxSp = 220.0; $accel = 90.0; $bounty = 25; $scale = 1.0; $color = [byte]9
-    if ($type -eq 'Trader') { $hull = 34; $dmg = 4; $maxSp = 140; $accel = 50; $bounty = 10; $scale = 1.15; $color = [byte]11 }
-    elseif ($type -eq 'Python') { $hull = 80; $dmg = 10; $maxSp = 160; $accel = 55; $bounty = 110; $scale = 1.35; $color = [byte]9 }
+    $ecm = $false; $msl = 0; $blink = $false
+    if ($type -eq 'Sidewinder') { $hull = 16; $dmg = 4; $maxSp = 280; $accel = 140; $bounty = 15; $scale = 0.62; $msl = 1 }
+    elseif ($type -eq 'Trader' -or $type -eq 'Cobra') { $hull = 40; $dmg = 5; $maxSp = 160; $accel = 60; $bounty = 35; $scale = 1.15; $color = [byte]11; $ecm = $true }
+    elseif ($type -eq 'Adder') { $hull = 28; $dmg = 5; $maxSp = 210; $accel = 85; $bounty = 30; $scale = 0.85; $msl = 1 }
+    elseif ($type -eq 'Krait') { $hull = 18; $dmg = 6; $maxSp = 310; $accel = 160; $bounty = 40; $scale = 0.7; $color = [byte]12; $msl = 1 }
+    elseif ($type -eq 'Asp') { $hull = 55; $dmg = 9; $maxSp = 320; $accel = 140; $bounty = 140; $scale = 1.05; $color = [byte]13; $msl = 1 }
+    elseif ($type -eq 'Fer-de-Lance') { $hull = 72; $dmg = 12; $maxSp = 300; $accel = 125; $bounty = 200; $scale = 1.2; $color = [byte]12; $msl = 2 }
+    elseif ($type -eq 'Python') { $hull = 90; $dmg = 10; $maxSp = 150; $accel = 50; $bounty = 160; $scale = 1.4; $color = [byte]9; $ecm = $true; $msl = 1 }
     elseif ($type -eq 'Police') { $hull = 36; $dmg = 7; $maxSp = 260; $accel = 110; $bounty = 0; $scale = 1.0; $color = [byte]14 }
-    elseif ($type -eq 'Alien') { $hull = 110; $dmg = 14; $maxSp = 280; $accel = 130; $bounty = 250; $scale = 1.7; $color = [byte]13 }
+    elseif ($type -eq 'Thargoid' -or $type -eq 'Alien') { $hull = 120; $dmg = 14; $maxSp = 280; $accel = 130; $bounty = 350; $scale = 1.7; $color = [byte]13; $ecm = $true; $msl = 2 }
+    elseif ($type -eq 'Thargon') { $hull = 8; $dmg = 4; $maxSp = 340; $accel = 180; $bounty = 8; $scale = 0.35; $color = [byte]13 }
+    elseif ($type -eq 'Asteroid') { $hull = 28; $dmg = 0; $maxSp = 20; $accel = 0; $bounty = 5; $scale = 1.6; $color = [byte]8 }
+    elseif ($type -eq 'Canister') { $hull = 1; $dmg = 0; $maxSp = 0; $accel = 0; $bounty = 0; $scale = 1.0; $color = [byte]11 }
+    elseif ($type -eq 'ThargoidStation') { $hull = 240; $dmg = 0; $maxSp = 0; $accel = 0; $bounty = 5000; $scale = 1.15; $color = [byte]13 }
     $m = New-Object 'double[]' 9
     Set-Identity $m
     $ship = @{
         Id = $script:NextId; Type = $type; Role = $role
         X = $x; Y = $y; Z = $z; VX = 0.0; VY = 0.0; VZ = 0.0
         M = $m; Hull = $hull; HullMax = $hull; Dmg = $dmg; MaxSp = $maxSp; Accel = $accel
-        Bounty = $bounty; Scale = $scale; Color = $color; Cool = 0.6 + ($script:NextId % 5) * 0.15
+        Bounty = $bounty; Scale = $scale; Color = $color; Cool = 0.8 + ($script:NextId % 5) * 0.15
         Provoked = $false; Radius = 40.0 * $scale
         Jx = ($x * 0.15); Jy = 200.0; Jz = $z
+        Ecm = $ecm; Msl = $msl; Blink = $blink; Good = ''; SpawnT = 3.0
     }
     $script:NextId++
     Set-Facing $m (-$x) (200 - $y) (-$z)
     return $ship
+}
+
+function Flush-Pending {
+    if ($null -eq $script:Pending) { return }
+    foreach ($s in $script:Pending) { [void]$script:Ships.Add($s) }
+    $script:Pending.Clear()
+}
+
+function Mesh-Of($ship) {
+    switch ($ship.Type) {
+        'Trader' { return $script:MeshTrader }
+        'Cobra' { return $script:MeshTrader }
+        'Adder' { return $script:MeshTrader }
+        'Python' { return $script:MeshPython }
+        'Asp' { return $script:MeshPython }
+        'Fer-de-Lance' { return $script:MeshPython }
+        'Alien' { return $script:MeshAlien }
+        'Thargoid' { return $script:MeshAlien }
+        'Thargon' { return $script:MeshAlien }
+        'Asteroid' { return $script:MeshRock }
+        'Canister' { return $script:MeshCan }
+        'ThargoidStation' { return $script:MeshStation }
+        default { return $script:MeshViper }
+    }
 }
 
 function Spawn-Traffic {
@@ -634,33 +842,57 @@ function Spawn-Traffic {
     else { $pirates = 2 + ($roll % 3) }
     if ($pirates -gt 4) { $pirates = 4 }
     $rng = New-Object System.Random (($sys.Seed + 1) * ($script:Day + 3) + $script:GalNum * 17)
+    $pool = @('Sidewinder', 'Sidewinder', 'Viper', 'Cobra')
+    if ($sys.Gov -le 3) { $pool += @($script:Rare, 'Cobra', 'Asp') }
+    if ($sys.Gov -le 1) { $pool += @('Python', $script:Rare, 'Sidewinder') }
     for ($n = 0; $n -lt $pirates; $n++) {
         $ang = $rng.NextDouble() * 6.28318
         $dist = 4500.0 + $rng.NextDouble() * 7000.0
         $x = [Math]::Cos($ang) * $dist
         $z = [Math]::Sin($ang) * $dist
         $y = ($rng.NextDouble() - 0.5) * 1600.0
-        $type = 'Viper'
-        if ($sys.Gov -le 2 -and $rng.Next(0, 5) -eq 0) { $type = 'Python' }
+        $type = $pool[$rng.Next(0, $pool.Count)]
         [void]$script:Ships.Add((New-Ship $type 'pirate' $x $y $z))
+    }
+    if ($script:Legal -ge 20 -and $script:Kills -ge 128) {
+        [void]$script:Ships.Add((New-Ship 'Fer-de-Lance' 'hunter' 5200 400 -1800))
     }
     $traders = 1
     if ($sys.Gov -ge 4) { $traders = 2 }
     for ($n = 0; $n -lt $traders; $n++) {
         $ang = $rng.NextDouble() * 6.28318
         $dist = 3000.0 + $rng.NextDouble() * 5000.0
-        [void]$script:Ships.Add((New-Ship 'Trader' 'trader' ([Math]::Cos($ang) * $dist) (($rng.NextDouble() - 0.5) * 800) ([Math]::Sin($ang) * $dist)))
+        [void]$script:Ships.Add((New-Ship 'Cobra' 'trader' ([Math]::Cos($ang) * $dist) (($rng.NextDouble() - 0.5) * 800) ([Math]::Sin($ang) * $dist)))
     }
     $illegal = $false
     foreach ($k in @($script:Cargo.Keys)) {
-        if ($k -eq 'Narcotics' -or $k -eq 'Firearms') { $illegal = $true }
+        if (Test-Contraband $k) { $illegal = $true }
     }
-    if ((Test-Lawful $sys.Gov) -and ($script:Legal -gt 0 -or $illegal)) {
-        $cops = 1
-        if ($script:Legal -gt 12) { $cops = 2 }
-        for ($n = 0; $n -lt $cops; $n++) {
-            [void]$script:Ships.Add((New-Ship 'Police' 'police' (1800.0 + $n * 400) 300.0 (2200.0 + $n * 300)))
-        }
+    $cops = 0
+    if ($sys.Gov -ge 6) { $cops = 1 }
+    if ((Test-Lawful $sys.Gov) -and ($script:Legal -gt 0 -or $illegal)) { $cops = 1 }
+    if ($script:Legal -gt 20) { $cops = 2 }
+    for ($n = 0; $n -lt $cops; $n++) {
+        [void]$script:Ships.Add((New-Ship 'Police' 'police' (1800.0 + $n * 400) 300.0 (2200.0 + $n * 300)))
+    }
+    $rocks = 2
+    if ($sys.Gov -le 1) { $rocks = 4 }
+    for ($n = 0; $n -lt $rocks; $n++) {
+        $ang = $rng.NextDouble() * 6.28318
+        $dist = 5000.0 + $rng.NextDouble() * 4000.0
+        $rock = New-Ship 'Asteroid' 'rock' ([Math]::Cos($ang) * $dist) (($rng.NextDouble() - 0.5) * 600) ([Math]::Sin($ang) * $dist)
+        $rock.VX = ($rng.NextDouble() - 0.5) * 12
+        $rock.VZ = ($rng.NextDouble() - 0.5) * 12
+        [void]$script:Ships.Add($rock)
+    }
+    if ($script:Cloak -eq 1) {
+        $asp = New-Ship 'Asp' 'cloak' 4200 180 900
+        $asp.Blink = $true
+        [void]$script:Ships.Add($asp)
+    }
+    if ($script:Base -eq 1) {
+        [void]$script:Ships.Add((New-Ship 'ThargoidStation' 'base' 6400 0 2400))
+        $script:Base = 2
     }
 }
 
@@ -739,8 +971,8 @@ function Enter-Witch {
     $script:Debris = New-Object System.Collections.Generic.List[object]
     $script:NextId = 1
     $script:TargetId = -1
-    [void]$script:Ships.Add((New-Ship 'Alien' 'alien' 0 0 2200))
-    Say 'WITCH-SPACE. An intruder has locked on.'
+    [void]$script:Ships.Add((New-Ship 'Thargoid' 'alien' 0 0 2200))
+    Say 'WITCH-SPACE. A Thargoid has locked on.'
 }
 
 function Complete-Witch {
@@ -749,19 +981,34 @@ function Complete-Witch {
     Say 'Normal space. The witch-space tear has closed.'
 }
 
-function Hurt-Player([double]$amount) {
+function Hurt-Player([double]$amount, [bool]$fore) {
+    if (-not $PSBoundParameters.ContainsKey('fore')) { $fore = $true }
     $script:SinceHit = 0
     $script:HitFlash = 0.18
-    if ($script:Shield -gt 0) {
-        $script:Shield -= $amount
-        if ($script:Shield -lt 0) {
-            $script:Hull += $script:Shield
-            $script:Shield = 0
+    $left = $amount
+    if ($fore) {
+        if ($script:ShieldF -gt 0) {
+            $script:ShieldF -= $left
+            if ($script:ShieldF -lt 0) { $left = -$script:ShieldF; $script:ShieldF = 0 }
+            else { $left = 0 }
         }
     }
     else {
-        $script:Hull -= $amount
+        if ($script:ShieldA -gt 0) {
+            $script:ShieldA -= $left
+            if ($script:ShieldA -lt 0) { $left = -$script:ShieldA; $script:ShieldA = 0 }
+            else { $left = 0 }
+        }
     }
+    if ($left -gt 0) {
+        if ($script:Energy -gt 0) {
+            $script:Energy -= $left
+            if ($script:Energy -lt 0) { $left = -$script:Energy; $script:Energy = 0 }
+            else { $left = 0 }
+        }
+    }
+    if ($left -gt 0) { $script:Hull -= $left }
+    $script:Shield = $script:ShieldF
     if ($script:Hull -le 0) {
         $script:Hull = 0
         $script:Dead = $true
@@ -780,11 +1027,22 @@ function Add-Debris([double]$x, [double]$y, [double]$z, [byte]$color) {
     }
 }
 
+function Drop-Can([double]$x, [double]$y, [double]$z, [string]$good) {
+    $can = New-Ship 'Canister' 'cargo' $x $y $z
+    $can.Good = $good
+    if ($null -eq $script:Pending) { $script:Pending = New-Object System.Collections.Generic.List[object] }
+    $script:Pending.Add($can)
+}
+
 function Kill-Ship($ship) {
-    if ($ship.Role -eq 'pirate' -or $ship.Role -eq 'alien') {
+    $paid = $false
+    if ($ship.Role -eq 'pirate' -or $ship.Role -eq 'alien' -or $ship.Role -eq 'hunter' -or $ship.Role -eq 'rock') {
         $script:Kills++
         $script:Cash += [int]$ship.Bounty
-        Say "Destroyed $($ship.Type). Bounty $($ship.Bounty) CR."
+        $paid = $true
+        if ($ship.Role -eq 'rock') { Say "Asteroid broken. Bounty $($ship.Bounty) CR." }
+        elseif ($ship.Type -eq 'Thargoid') { Say "Thargoid destroyed. Bounty $($ship.Bounty) CR. Thargons go inert." }
+        else { Say "Destroyed $($ship.Type). Bounty $($ship.Bounty) CR." }
     }
     elseif ($ship.Role -eq 'police') {
         $script:Legal += 12
@@ -801,54 +1059,202 @@ function Kill-Ship($ship) {
             Say 'You fired on a clean ship.'
         }
     }
+    elseif ($ship.Role -eq 'base') {
+        $script:Kills++
+        $script:Cash += [int]$ship.Bounty
+        $script:Base = 3
+        $paid = $true
+        Say "Thargoid station destroyed. Bounty $($ship.Bounty) CR."
+    }
+    elseif ($ship.Role -eq 'cloak') {
+        $script:Kills++
+        $script:Cash += [int]$ship.Bounty
+        $script:Cloak = 2
+        Drop-Can $ship.X $ship.Y $ship.Z 'Cloak'
+        Say 'The Asp breaks up. Scoop the canister.'
+    }
+    if ($paid -and $ship.Role -ne 'rock' -and $ship.Role -ne 'base' -and $script:Scoops) {
+        Drop-Can ($ship.X + 40) $ship.Y ($ship.Z + 40) 'Minerals'
+    }
+    if ($ship.Role -eq 'rock' -and (Laser-Kind) -eq 'mining') {
+        Drop-Can ($ship.X + 30) $ship.Y $ship.Z 'Minerals'
+        Drop-Can ($ship.X - 30) ($ship.Y + 20) $ship.Z 'Minerals'
+        Drop-Can $ship.X ($ship.Y - 20) ($ship.Z + 30) 'Minerals'
+    }
     Add-Debris $ship.X $ship.Y $ship.Z $ship.Color
 }
 
+function Sync-Camera {
+    if ($null -eq $script:Cam) { $script:Cam = New-Object 'double[]' 9 }
+    $m = $script:M
+    $v = $script:View
+    if ($v -eq 1) {
+        $script:Cam[0] = -$m[0]; $script:Cam[1] = -$m[1]; $script:Cam[2] = -$m[2]
+        $script:Cam[3] = $m[3]; $script:Cam[4] = $m[4]; $script:Cam[5] = $m[5]
+        $script:Cam[6] = -$m[6]; $script:Cam[7] = -$m[7]; $script:Cam[8] = -$m[8]
+    }
+    elseif ($v -eq 2) {
+        $script:Cam[0] = $m[6]; $script:Cam[1] = $m[7]; $script:Cam[2] = $m[8]
+        $script:Cam[3] = $m[3]; $script:Cam[4] = $m[4]; $script:Cam[5] = $m[5]
+        $script:Cam[6] = -$m[0]; $script:Cam[7] = -$m[1]; $script:Cam[8] = -$m[2]
+    }
+    elseif ($v -eq 3) {
+        $script:Cam[0] = -$m[6]; $script:Cam[1] = -$m[7]; $script:Cam[2] = -$m[8]
+        $script:Cam[3] = $m[3]; $script:Cam[4] = $m[4]; $script:Cam[5] = $m[5]
+        $script:Cam[6] = $m[0]; $script:Cam[7] = $m[1]; $script:Cam[8] = $m[2]
+    }
+    else {
+        for ($i = 0; $i -lt 9; $i++) { $script:Cam[$i] = $m[$i] }
+    }
+}
+
+function Cam-Local([double]$dx, [double]$dy, [double]$dz) {
+    $c = $script:Cam
+    if ($null -eq $c) { $c = $script:M }
+    $script:LocX = $dx * $c[0] + $dy * $c[1] + $dz * $c[2]
+    $script:LocY = $dx * $c[3] + $dy * $c[4] + $dz * $c[5]
+    $script:LocZ = $dx * $c[6] + $dy * $c[7] + $dz * $c[8]
+}
+
 function Try-Fire {
-    $cost = 8.0; $cool = 0.34; $dmg = 12.0; $range = 6200.0
-    if ($script:Beam) { $cost = 3.0; $cool = 0.08; $dmg = 6.0 }
+    $kind = Laser-Kind
+    if ($kind -eq 'none') { return }
+    if ($script:Heat -gt 92) { Say 'Laser temperature too high.'; return }
+    $cost = 7.0; $cool = 0.28; $dmg = 11.0; $heat = 16.0; $range = 6200.0
+    if ($kind -eq 'beam') { $cost = 4.0; $cool = 0.08; $dmg = 7.0; $heat = 9.0 }
+    elseif ($kind -eq 'military') { $cost = 10.0; $cool = 0.16; $dmg = 18.0; $heat = 18.0 }
+    elseif ($kind -eq 'mining') { $cost = 5.0; $cool = 0.14; $dmg = 3.0; $heat = 8.0 }
     if ($script:Cool -gt 0 -or $script:Energy -lt $cost) { return }
     $script:Energy -= $cost
     $script:Cool = $cool
+    $script:Heat += $heat
+    if ($script:Heat -gt 100) { $script:Heat = 100 }
     $script:LaserT = 0.07
+    Sync-Camera
     $best = $null
     $bestD = $range
     foreach ($s in $script:Ships) {
-        if ($s.Hull -le 0) { continue }
+        if ($s.Hull -le 0 -or $s.Role -eq 'cargo') { continue }
         $dx = $s.X - $script:Px; $dy = $s.Y - $script:Py; $dz = $s.Z - $script:Pz
-        World-To-Local $script:M $dx $dy $dz
+        Cam-Local $dx $dy $dz
         $dist = [Math]::Sqrt($script:LocX * $script:LocX + $script:LocY * $script:LocY + $script:LocZ * $script:LocZ)
         if ($script:LocZ -le 40 -or $dist -gt $range -or $dist -lt 1) { continue }
         $off = [Math]::Sqrt($script:LocX * $script:LocX + $script:LocY * $script:LocY) / $dist
         if ($off -lt 0.11 -and $dist -lt $bestD) { $best = $s; $bestD = $dist }
     }
     if ($null -ne $best) {
-        $best.Hull -= $dmg
+        $hit = $dmg
+        if ($kind -eq 'mining' -and $best.Role -eq 'rock') { $hit = 40 }
+        $best.Hull -= $hit
         if ($best.Role -eq 'trader') { $best.Provoked = $true; $script:Legal += 1 }
         $script:Lx = $best.X; $script:Ly = $best.Y; $script:Lz = $best.Z
         if ($best.Hull -le 0) { Kill-Ship $best }
     }
     else {
-        $script:Lx = $script:Px + $script:M[6] * 2400.0
-        $script:Ly = $script:Py + $script:M[7] * 2400.0
-        $script:Lz = $script:Pz + $script:M[8] * 2400.0
+        $c = $script:Cam
+        $script:Lx = $script:Px + $c[6] * 2400.0
+        $script:Ly = $script:Py + $c[7] * 2400.0
+        $script:Lz = $script:Pz + $c[8] * 2400.0
     }
+}
+
+function Arm-Missile {
+    if ($script:Missiles -le 0) { Say 'No missiles.'; return }
+    Sync-Camera
+    $best = $null
+    $bestD = 8000.0
+    foreach ($s in $script:Ships) {
+        if ($s.Hull -le 0 -or $s.Role -eq 'cargo') { continue }
+        Cam-Local ($s.X - $script:Px) ($s.Y - $script:Py) ($s.Z - $script:Pz)
+        $dist = Speed-Of $script:LocX $script:LocY $script:LocZ
+        if ($script:LocZ -le 0 -or $dist -lt 1 -or $dist -gt $bestD) { continue }
+        $off = [Math]::Sqrt($script:LocX * $script:LocX + $script:LocY * $script:LocY) / $dist
+        if ($off -lt 0.22) { $best = $s; $bestD = $dist }
+    }
+    if ($null -eq $best) {
+        Cycle-Target
+        $script:MissileArm = 1
+        Say 'Missile armed. No lock yet.'
+        return
+    }
+    $script:TargetId = $best.Id
+    $script:MissileArm = 2
+    Say "Missile locked. $($best.Type)."
 }
 
 function Try-Missile {
     if ($script:Missiles -le 0) { Say 'No missiles.'; return }
+    if ($script:MissileArm -lt 2) { Say 'Lock a target with T.'; return }
     $target = $null
     foreach ($s in $script:Ships) {
         if ($s.Id -eq $script:TargetId -and $s.Hull -gt 0) { $target = $s }
     }
-    if ($null -eq $target) { Say 'No target. Press T.'; return }
+    if ($null -eq $target) { Say 'Lock lost.'; $script:MissileArm = 0; return }
     $script:Missiles--
+    $script:MissileArm = 0
     $script:Bolts.Add(@{
         X = $script:Px + $script:M[6] * 80; Y = $script:Py + $script:M[7] * 80; Z = $script:Pz + $script:M[8] * 80
         VX = $script:M[6] * 500; VY = $script:M[7] * 500; VZ = $script:M[8] * 500
-        Life = 7.0; Target = $target.Id
+        Life = 8.0; Target = $target.Id; Player = $false
     })
     Say 'Missile away.'
+}
+
+function Try-Heavy {
+    if ($script:Heavy -le 0) { Say 'No heavy missile.'; return }
+    $script:Heavy--
+    $targetId = -3
+    foreach ($s in $script:Ships) {
+        if ($s.Role -eq 'base' -and $s.Hull -gt 0) { $targetId = $s.Id }
+    }
+    $script:Bolts.Add(@{
+        X = $script:Px + $script:M[6] * 90; Y = $script:Py + $script:M[7] * 90; Z = $script:Pz + $script:M[8] * 90
+        VX = $script:M[6] * 420; VY = $script:M[7] * 420; VZ = $script:M[8] * 420
+        Life = 12.0; Target = $targetId; Player = $false; Heavy = $true
+    })
+    Say 'Heavy missile away.'
+}
+
+function Try-ECM {
+    if (-not $script:ECM) { Say 'No ECM system.'; return }
+    if ($script:Energy -lt 16) { Say 'Not enough energy for ECM.'; return }
+    $script:Energy -= 16
+    if ($null -ne $script:Bolts) { $script:Bolts.Clear() }
+    Say 'ECM. Missiles destroyed.'
+}
+
+function Try-Bomb {
+    if ($script:Bomb -le 0) { Say 'No energy bomb.'; return }
+    $script:Bomb--
+    foreach ($s in $script:Ships) {
+        if ($s.Hull -le 0) { continue }
+        if ($s.Role -eq 'cargo') { continue }
+        $s.Hull = 0
+        if ($s.Role -eq 'base') { $script:Base = 3; $script:Cash += [int]$s.Bounty; $script:Kills++ }
+        elseif ($s.Role -eq 'pirate' -or $s.Role -eq 'alien' -or $s.Role -eq 'hunter' -or $s.Role -eq 'rock') {
+            $script:Kills++; $script:Cash += [int]$s.Bounty
+        }
+        elseif ($s.Role -eq 'police') { $script:Legal += 12 }
+        elseif ($s.Role -eq 'trader') { $script:Legal += 8 }
+    }
+    if ($null -ne $script:Bolts) { $script:Bolts.Clear() }
+    Say 'Energy bomb. The sky is empty.'
+}
+
+function Try-Escape {
+    if (-not $script:EscapePod) { Say 'No escape pod.'; return }
+    if ($script:Witch) { Say 'The pod cannot launch in witch-space.'; return }
+    Clear-Cargo
+    $script:Legal = 0
+    $script:Hull = 100
+    $script:ShieldF = $script:ShieldMax
+    $script:ShieldA = $script:ShieldMax
+    $script:Shield = $script:ShieldMax
+    $script:Energy = $script:EnergyMax
+    $script:CloakOn = $false
+    $script:Escaping = $true
+    $script:DidDock = $true
+    Say 'Escape pod away. A new Cobra is waiting at the station.'
 }
 
 function Cycle-Target {
@@ -896,7 +1302,20 @@ function Test-MassLocked {
     return $false
 }
 
+function Test-TorusLocked {
+    if (Test-MassLocked) { return $true }
+    $dx = $script:Px - $script:SuX; $dy = $script:Py - $script:SuY; $dz = $script:Pz - $script:SuZ
+    if ((Speed-Of $dx $dy $dz) -lt ($script:SuR + 4000)) { return $true }
+    if ($null -eq $script:Ships) { return $false }
+    foreach ($s in $script:Ships) {
+        if ($s.Hull -le 0 -or $s.Role -eq 'cargo' -or $s.Role -eq 'rock') { continue }
+        if ((Speed-Of ($s.X - $script:Px) ($s.Y - $script:Py) ($s.Z - $script:Pz)) -lt 2600) { return $true }
+    }
+    return $false
+}
+
 function Try-Jump {
+    if ($script:JumpT -gt 0) { $script:JumpT = 0; Say 'Hyperspace aborted.'; return }
     if ($script:Witch) {
         foreach ($s in $script:Ships) {
             if ($s.Role -eq 'alien' -and $s.Hull -gt 0) { Say 'Witch-space interference.'; return }
@@ -909,6 +1328,22 @@ function Try-Jump {
     $dist = Get-Ly $script:Sys $script:JumpTarget
     if ($dist -gt $script:Fuel + 0.001) { Say "Need $(F1 $dist) LY of fuel."; return }
     if (Test-MassLocked) { Say 'Mass-locked. Move away from the station or planet.'; return }
+    $script:JumpT = 3.0
+    Say 'Hyperspace in 3.'
+}
+
+function Complete-Jump {
+    if ($script:JumpTarget -lt 0 -or $script:JumpTarget -gt 255 -or $script:JumpTarget -eq $script:Sys) {
+        Say 'Hyperspace aborted.'
+        return
+    }
+    $dist = Get-Ly $script:Sys $script:JumpTarget
+    if ($dist -gt $script:Fuel + 0.001) { Say "Need $(F1 $dist) LY of fuel."; return }
+    if (Test-MassLocked) { Say 'Mass-locked. Countdown cancelled.'; return }
+    $leak = $false
+    $destTech = $script:Systems[$script:JumpTarget].Tech
+    $canEscape = $script:Scoops -or ($script:GalCharges -gt 0) -or ($destTech -ge 5)
+    if ($script:Nova -eq 0 -and $script:Day -ge 2 -and $canEscape -and (($script:GalSeed + $script:Day * 3) % 7) -eq 0) { $leak = $true }
     $script:Fuel -= $dist
     if ($script:Fuel -lt 0) { $script:Fuel = 0 }
     $script:Day++
@@ -919,12 +1354,19 @@ function Try-Jump {
         $script:Sys = $script:JumpTarget
         Enter-Space 'jump'
     }
+    if ($leak) {
+        $script:Fuel = 0.2
+        $script:Nova = 1
+        Say 'Fuel leak. The tank is almost empty. Dock now.'
+    }
 }
 
 function Try-Galactic {
-    if (-not $script:GalDrive) { Say 'No galactic hyperdrive.'; return }
+    if ($script:GalCharges -le 0) { Say 'No galactic hyperdrive.'; return }
     if ($script:Witch) { Say 'Not in witch-space.'; return }
     if (Test-MassLocked) { Say 'Mass-locked.'; return }
+    $script:GalCharges--
+    $script:GalDrive = ($script:GalCharges -gt 0)
     $script:GalNum++
     if ($script:GalNum -gt 8) { $script:GalNum = 1 }
     $script:GalSeed = ($script:GalSeed + 4099) -band 65535
@@ -936,7 +1378,7 @@ function Try-Galactic {
     $script:Market = $null
     $script:Day++
     Enter-Space 'jump'
-    Say "Galaxy $($script:GalNum)."
+    Say "Galaxy $($script:GalNum). That hyperdrive is spent."
 }
 
 function Station-Entrance {
@@ -973,17 +1415,66 @@ function Try-Dock {
     Say 'Too far to dock. Buy a docking computer or fly in.'
 }
 
+function Offer-Missions {
+    if ($script:Nova -eq 1) {
+        Clear-Cargo
+        $script:Cargo['Refugees'] = 10
+        Update-CargoUsed
+        $script:Nova = 2
+        $script:NovaSys = $script:Sys
+        Say 'The sun is going nova. Refugees fill the hold. Leave and do not come back.'
+        return
+    }
+    if ($script:Nova -eq 2 -and $script:Sys -eq $script:NovaSys) {
+        Say 'The station will not keep the refugees. Leave this system.'
+        return
+    }
+    if ($script:Nova -eq 2) {
+        if ($script:Cargo.ContainsKey('Refugees')) { [void]$script:Cargo.Remove('Refugees') }
+        Update-CargoUsed
+        $script:Cash += 1000
+        $script:Nova = 3
+        Say 'Refugees safe. The navy pays 1000 CR.'
+        return
+    }
+    if ($script:Cloak -eq 0 -and $script:Kills -ge 512) {
+        $script:Cloak = 1
+        Say 'Naval note: a cloaked Asp will meet you after launch. Scoop what it drops.'
+        return
+    }
+    if ($script:Base -eq 0 -and $script:Kills -ge 2560) {
+        $script:Base = 1
+        $script:Heavy = 1
+        Say 'Thargoid station occupies this system. One heavy missile is aboard. Press B.'
+        return
+    }
+}
+
 function Apply-DockService {
     $sys = $script:Systems[$script:Sys]
+    $script:ShieldF = $script:ShieldMax
+    $script:ShieldA = $script:ShieldMax
     $script:Shield = $script:ShieldMax
     $script:Energy = $script:EnergyMax
+    $script:Heat = 0
+    $script:Temp = 0
+    $script:CloakOn = $false
+    $script:JumpT = 0
     $script:AutoDock = $false
     $script:Vx = 0; $script:Vy = 0; $script:Vz = 0
+    if ($script:Escaping) {
+        $script:Escaping = $false
+        $script:Legal = 0
+        Say "Pod recovered at $($sys.Name). Status cleared. The new Cobra keeps your fittings."
+        Offer-Missions
+        Save-Commander
+        return
+    }
     $fine = 0
     if (Test-Lawful $sys.Gov) {
         $fine += $script:Legal * 20
         foreach ($k in @($script:Cargo.Keys)) {
-            if ($k -eq 'Narcotics' -or $k -eq 'Firearms') {
+            if (Test-Contraband $k) {
                 $q = [int]$script:Cargo[$k]
                 $fine += $q * 40
                 [void]$script:Cargo.Remove($k)
@@ -1005,16 +1496,43 @@ function Apply-DockService {
     else {
         Say "Docked at $($sys.Name). Shields restored."
     }
+    Offer-Missions
     Save-Commander
 }
 
 function Update-Enemies([double]$dt) {
+    $mother = $false
+    foreach ($e in $script:Ships) {
+        if ($e.Role -eq 'alien' -and $e.Hull -gt 0) { $mother = $true }
+    }
+    if (-not $mother) {
+        foreach ($e in $script:Ships) {
+            if ($e.Type -eq 'Thargon' -and $e.Hull -gt 0) { $e.Hull = 0 }
+        }
+    }
     $safe = (Speed-Of $script:Px $script:Py $script:Pz) -lt 1700
     foreach ($e in $script:Ships) {
         if ($e.Hull -le 0) { continue }
+        if ($e.Role -eq 'cargo' -or $e.Role -eq 'base') { continue }
+        if ($e.Role -eq 'rock') {
+            $e.X += $e.VX * $dt; $e.Y += $e.VY * $dt; $e.Z += $e.VZ * $dt
+            continue
+        }
+        if ($e.Role -eq 'alien') {
+            $e.SpawnT -= $dt
+            $thargons = 0
+            foreach ($t in $script:Ships) { if ($t.Type -eq 'Thargon' -and $t.Hull -gt 0) { $thargons++ } }
+            if ($e.SpawnT -le 0 -and $thargons -lt 4) {
+                $spawn = New-Ship 'Thargon' 'thargon' ($e.X + 180) $e.Y ($e.Z - 200)
+                if ($null -eq $script:Pending) { $script:Pending = New-Object System.Collections.Generic.List[object] }
+                $script:Pending.Add($spawn)
+                $e.SpawnT = 2.6
+            }
+        }
         $dx = $script:Px - $e.X; $dy = $script:Py - $e.Y; $dz = $script:Pz - $e.Z
         $dist = Speed-Of $dx $dy $dz
-        $hostile = $e.Role -eq 'pirate' -or $e.Role -eq 'police' -or $e.Role -eq 'alien' -or $e.Provoked
+        $hostile = $e.Role -eq 'pirate' -or $e.Role -eq 'police' -or $e.Role -eq 'alien' -or $e.Role -eq 'hunter' -or $e.Role -eq 'thargon' -or $e.Role -eq 'cloak' -or $e.Provoked
+        if ($script:CloakOn -and $dist -gt 480) { $hostile = $false }
         if ($e.Role -eq 'trader' -and -not $e.Provoked) {
             $dx = $e.Jx - $e.X; $dy = $e.Jy - $e.Y; $dz = $e.Jz - $e.Z
             if ((Speed-Of $dx $dy $dz) -lt 600) {
@@ -1045,14 +1563,32 @@ function Update-Enemies([double]$dt) {
             if ($ld -gt 1 -and $script:LocZ -gt 0) {
                 $off = [Math]::Sqrt($script:LocX * $script:LocX + $script:LocY * $script:LocY) / $ld
                 if ($off -lt 0.16) {
-                    Hurt-Player $e.Dmg
-                    $e.Cool = 1.15
-                    Say 'Under fire.'
+                    if ($e.Msl -gt 0 -and $dist -lt 2600) {
+                        $e.Msl--
+                        $script:Bolts.Add(@{
+                            X = $e.X; Y = $e.Y; Z = $e.Z
+                            VX = $e.M[6] * 500; VY = $e.M[7] * 500; VZ = $e.M[8] * 500
+                            Life = 8.0; Target = -2; Player = $true; Heavy = $false
+                        })
+                        $e.Cool = 2.4
+                        Say 'INCOMING MISSILE'
+                    }
+                    else {
+                        World-To-Local $script:M ($e.X - $script:Px) ($e.Y - $script:Py) ($e.Z - $script:Pz)
+                        Hurt-Player $e.Dmg ($script:LocZ -ge 0)
+                        $e.Cool = 1.15
+                        Say 'Under fire.'
+                    }
                 }
             }
         }
-        if ($dist -lt (70 + $e.Radius)) { Hurt-Player 8; $e.Hull -= 6 }
+        if ($dist -lt (70 + $e.Radius) -and $e.Role -ne 'cargo') {
+            World-To-Local $script:M ($e.X - $script:Px) ($e.Y - $script:Py) ($e.Z - $script:Pz)
+            Hurt-Player 8 ($script:LocZ -ge 0)
+            $e.Hull -= 6
+        }
     }
+    Flush-Pending
 }
 
 function Update-Bolts([double]$dt) {
@@ -1062,13 +1598,35 @@ function Update-Bolts([double]$dt) {
         foreach ($s in $script:Ships) {
             if ($s.Id -eq $b.Target -and $s.Hull -gt 0) { $target = $s }
         }
-        if ($null -ne $target) {
-            $dx = $target.X - $b.X; $dy = $target.Y - $b.Y; $dz = $target.Z - $b.Z
+        $aimX = 0.0; $aimY = 0.0; $aimZ = 0.0; $homing = $false
+        if ($b.Target -eq -2) {
+            $aimX = $script:Px; $aimY = $script:Py; $aimZ = $script:Pz
+            $homing = $true
+        }
+        elseif ($null -ne $target) {
+            $aimX = $target.X; $aimY = $target.Y; $aimZ = $target.Z
+            $homing = $true
+        }
+        if ($homing) {
+            $dx = $aimX - $b.X; $dy = $aimY - $b.Y; $dz = $aimZ - $b.Z
             $dist = Speed-Of $dx $dy $dz
+            if ($null -ne $target -and $target.Ecm -and $dist -lt 900 -and (($script:Tick % 4) -eq 0)) {
+                $script:Bolts.Clear()
+                Say "$($target.Type) fires ECM."
+                return
+            }
             if ($dist -lt 120) {
-                $target.Hull -= 46
-                if ($target.Role -eq 'trader') { $target.Provoked = $true; $script:Legal += 1 }
-                if ($target.Hull -le 0) { Kill-Ship $target }
+                if ($b.Target -eq -2) {
+                    Hurt-Player 30 $true
+                    Say 'Missile impact.'
+                }
+                else {
+                    $blow = 46.0
+                    if ($b.ContainsKey('Heavy') -and $b.Heavy) { $blow = 220 }
+                    $target.Hull -= $blow
+                    if ($target.Role -eq 'trader') { $target.Provoked = $true; $script:Legal += 1 }
+                    if ($target.Hull -le 0) { Kill-Ship $target }
+                }
                 $script:Bolts.RemoveAt($i)
                 continue
             }
@@ -1099,6 +1657,33 @@ function Sweep-Dead {
     }
 }
 
+function Scoop-Cans {
+    if ($null -eq $script:Ships) { return }
+    Sync-Camera
+    for ($i = $script:Ships.Count - 1; $i -ge 0; $i--) {
+        $s = $script:Ships[$i]
+        if ($s.Role -ne 'cargo' -or $s.Hull -le 0) { continue }
+        $dist = Speed-Of ($s.X - $script:Px) ($s.Y - $script:Py) ($s.Z - $script:Pz)
+        if ($dist -gt 260) { continue }
+        Cam-Local ($s.X - $script:Px) ($s.Y - $script:Py) ($s.Z - $script:Pz)
+        if ($script:LocZ -le 0 -or $script:LocY -gt 40) { continue }
+        if ($s.Good -eq 'Cloak') {
+            $script:HasCloak = $true
+            $script:Cloak = 3
+            $s.Hull = 0
+            Say 'Cloaking device scooped. Press V.'
+            continue
+        }
+        $good = [string]$s.Good
+        if ($good.Length -eq 0) { $good = 'Minerals' }
+        if ($script:CargoUsed -ge $script:CargoMax) { Say 'Hold full.'; continue }
+        $script:Cargo[$good] = (Get-Hold $good) + 1
+        Update-CargoUsed
+        $s.Hull = 0
+        Say "Scooped 1t $good."
+    }
+}
+
 function Update-Flight([double]$dt) {
     if ($script:Dead) { return 'dead' }
     if ($dt -gt 0.12) { $dt = 0.12 }
@@ -1110,13 +1695,35 @@ function Update-Flight([double]$dt) {
     $script:HitFlash -= $dt
     $script:SinceHit += $dt
     $script:MsgT -= $dt
-    if ($script:Energy -lt $script:EnergyMax) {
-        $script:Energy += 16 * $dt
-        if ($script:Energy -gt $script:EnergyMax) { $script:Energy = $script:EnergyMax }
+    $script:Tick++
+    $script:Heat -= 24 * $dt
+    if ($script:Heat -lt 0) { $script:Heat = 0 }
+    if ($script:JumpT -gt 0) {
+        $script:JumpT -= $dt
+        if ($script:JumpT -le 0) {
+            $script:JumpT = 0
+            Complete-Jump
+            return 'ok'
+        }
     }
-    if ($script:SinceHit -gt 2.2 -and $script:Shield -lt $script:ShieldMax) {
-        $script:Shield += 10 * $dt
-        if ($script:Shield -gt $script:ShieldMax) { $script:Shield = $script:ShieldMax }
+    $recharge = 16.0
+    if ($script:EnergyUnit) { $recharge = 32.0 }
+    if ($script:CloakOn) {
+        $recharge -= 12.0
+        if ($script:Energy -lt 8) { $script:CloakOn = $false; Say 'Cloak dropped. Energy gone.' }
+    }
+    if ($script:Energy -lt $script:EnergyMax) {
+        $script:Energy += $recharge * $dt
+        if ($script:Energy -gt $script:EnergyMax) { $script:Energy = $script:EnergyMax }
+        if ($script:Energy -lt 0) { $script:Energy = 0 }
+    }
+    if ($script:Energy -gt 0 -and $script:Energy -lt 25 -and $script:Msg -ne 'ENERGY LOW') { Say 'ENERGY LOW' }
+    if ($script:SinceHit -gt 2.2) {
+        if ($script:ShieldF -lt $script:ShieldMax) { $script:ShieldF += 12 * $dt }
+        if ($script:ShieldA -lt $script:ShieldMax) { $script:ShieldA += 12 * $dt }
+        if ($script:ShieldF -gt $script:ShieldMax) { $script:ShieldF = $script:ShieldMax }
+        if ($script:ShieldA -gt $script:ShieldMax) { $script:ShieldA = $script:ShieldMax }
+        $script:Shield = $script:ShieldF
     }
 
     $pitch = $script:InPitch * 1.7
@@ -1133,6 +1740,7 @@ function Update-Flight([double]$dt) {
         Get-Steer $script:M (($script:Ex * $aimR) - $script:Px) (0 - $script:Py) (($script:Ez * $aimR) - $script:Pz)
         $pitch = $script:StPitch
         $roll = $script:StRoll
+        if ($dist -lt 1800) { $roll += $script:M[1] * 1.8 }
         $sp = Speed-Of $script:Vx $script:Vy $script:Vz
         $desired = 90.0
         if ($dist -lt 2200) { $desired = 48 }
@@ -1164,12 +1772,40 @@ function Update-Flight([double]$dt) {
         Brake-Velocity 170 $dt
         if ($manualThrust) { $script:AutoDock = $false }
     }
-    Clamp-Speed 640
+    $torusGo = $false
+    if ($script:InTorus) {
+        if ($script:Witch -or (Test-TorusLocked)) {
+            if ($script:Msg -ne 'Mass-locked.') { Say 'Mass-locked.' }
+        }
+        else {
+            $script:Vx = $script:M[6] * 2100
+            $script:Vy = $script:M[7] * 2100
+            $script:Vz = $script:M[8] * 2100
+            $script:AutoDock = $false
+            $torusGo = $true
+        }
+    }
+    if ($torusGo) { Clamp-Speed 2200 } else { Clamp-Speed 640 }
     $script:Px += $script:Vx * $dt
     $script:Py += $script:Vy * $dt
     $script:Pz += $script:Vz * $dt
 
     if (-not $script:Witch) {
+        $sux = $script:Px - $script:SuX; $suy = $script:Py - $script:SuY; $suz = $script:Pz - $script:SuZ
+        $sud = Speed-Of $sux $suy $suz
+        $script:Temp = 0
+        if ($sud -lt ($script:SuR + 2200)) {
+            $script:Temp = (1.0 - (($sud - $script:SuR) / 2200.0)) * 100.0
+            if ($script:Temp -lt 0) { $script:Temp = 0 }
+            if ($script:Temp -gt 100) { $script:Temp = 100 }
+            if ($script:Scoops -and $sud -gt ($script:SuR + 180) -and $script:Fuel -lt 7) {
+                $script:Fuel += 0.5 * $dt
+                if ($script:Fuel -gt 7) { $script:Fuel = 7 }
+                if ($script:MsgT -lt 0.3) { Say 'Fuel scooping.' }
+            }
+            if ($script:Temp -gt 92) { Hurt-Player (24 * $dt) $true }
+        }
+        if ($script:Scoops) { Scoop-Cans }
         $pdx = $script:Px - $script:PlX; $pdy = $script:Py - $script:PlY; $pdz = $script:Pz - $script:PlZ
         $pd = Speed-Of $pdx $pdy $pdz
         if ($pd -lt $script:PlR + 30) {
@@ -1190,7 +1826,10 @@ function Update-Flight([double]$dt) {
             $facingIn = - ($script:M[6] * $script:Px + $script:M[7] * $script:Py + $script:M[8] * $script:Pz) / $sd
         }
         if ($sd -lt 820 -and $align -gt 0.72 -and $sp -lt 62 -and $facingIn -gt 0.2) {
-            $script:DidDock = $true
+            if ($script:M[4] -lt 0.45) {
+                if ($script:HitFlash -le 0) { Hurt-Player 10 $true; Say 'Roll the slot level.' }
+            }
+            else { $script:DidDock = $true }
         }
         elseif ($sd -lt 400) {
             $ux = $script:Px / $sd
@@ -1210,6 +1849,7 @@ function Update-Flight([double]$dt) {
     Update-Bolts $dt
     Sweep-Dead
     if ($script:InFire) { Try-Fire }
+    Flush-Pending
     if ($script:Dead) { return 'dead' }
     if ($script:DidDock) { return 'docked' }
     return 'ok'
@@ -1435,7 +2075,7 @@ function Draw-Ellipse([double]$cx, [double]$cy, [double]$rx, [double]$ry, [char]
 
 function Project-Body([double]$wx, [double]$wy, [double]$wz) {
     $dx = $wx - $script:Px; $dy = $wy - $script:Py; $dz = $wz - $script:Pz
-    World-To-Local $script:M $dx $dy $dz
+    Cam-Local $dx $dy $dz
     $script:BodyZ = $script:LocZ
     if ($script:LocZ -lt 0.85) { $script:BodyOn = $false; return }
     $script:BodyOn = $true
@@ -1458,9 +2098,11 @@ function Draw-Mesh($mesh, [double]$ox, [double]$oy, [double]$oz, [double[]]$rm, 
         $wy = $oy + $lx * $rm[1] + $ly * $rm[4] + $lz * $rm[7]
         $wz = $oz + $lx * $rm[2] + $ly * $rm[5] + $lz * $rm[8]
         $dx = $wx - $script:Px; $dy = $wy - $script:Py; $dz = $wz - $script:Pz
-        $script:ViewTmp[$i * 3] = $dx * $script:M[0] + $dy * $script:M[1] + $dz * $script:M[2]
-        $script:ViewTmp[$i * 3 + 1] = $dx * $script:M[3] + $dy * $script:M[4] + $dz * $script:M[5]
-        $script:ViewTmp[$i * 3 + 2] = $dx * $script:M[6] + $dy * $script:M[7] + $dz * $script:M[8]
+        $c = $script:Cam
+        if ($null -eq $c) { $c = $script:M }
+        $script:ViewTmp[$i * 3] = $dx * $c[0] + $dy * $c[1] + $dz * $c[2]
+        $script:ViewTmp[$i * 3 + 1] = $dx * $c[3] + $dy * $c[4] + $dz * $c[5]
+        $script:ViewTmp[$i * 3 + 2] = $dx * $c[6] + $dy * $c[7] + $dz * $c[8]
     }
     for ($e = 0; $e -lt $edges.Length; $e += 2) {
         $a = $edges[$e]; $b = $edges[$e + 1]
@@ -1496,10 +2138,18 @@ function Format-Km([double]$metres) {
 }
 
 function Get-Arrow {
+    $script:CompassWhat = 'STN'
     $dx = -$script:Px; $dy = -$script:Py; $dz = -$script:Pz
+    $station = Speed-Of $dx $dy $dz
+    if ($station -gt 9000) {
+        $script:CompassWhat = 'PLN'
+        $dx = $script:PlX - $script:Px; $dy = $script:PlY - $script:Py; $dz = $script:PlZ - $script:Pz
+    }
     $dist = Speed-Of $dx $dy $dz
     if ($dist -lt 1) { $dist = 1 }
     World-To-Local $script:M ($dx / $dist) ($dy / $dist) ($dz / $dist)
+    $script:CompassMark = '+'
+    if ($script:LocZ -lt 0) { $script:CompassMark = 'o' }
     $lx = $script:LocX; $ly = $script:LocY; $lz = $script:LocZ
     $word = 'AHEAD'
     if ($lz -lt -0.15 -and [Math]::Abs($lx) -lt 0.45 -and [Math]::Abs($ly) -lt 0.45) { $word = 'BEHIND' }
@@ -1556,6 +2206,7 @@ function Draw-Scanner {
 }
 
 function Draw-Flight {
+    Sync-Camera
     if (-not $script:Witch) {
         for ($i = 0; $i -lt $script:StarN; $i++) {
             Project-Body $script:Stars[$i * 3] $script:Stars[$i * 3 + 1] $script:Stars[$i * 3 + 2]
@@ -1584,11 +2235,9 @@ function Draw-Flight {
         }
     }
     foreach ($s in $script:Ships) {
-        $mesh = $script:MeshViper
-        if ($s.Type -eq 'Trader') { $mesh = $script:MeshTrader }
-        elseif ($s.Type -eq 'Python') { $mesh = $script:MeshPython }
-        elseif ($s.Type -eq 'Alien') { $mesh = $script:MeshAlien }
-        Draw-Mesh $mesh $s.X $s.Y $s.Z $s.M $s.Scale '#' $s.Color
+        if ($s.Hull -le 0) { continue }
+        if ($s.Blink -and (($script:Tick % 10) -lt 4)) { continue }
+        Draw-Mesh (Mesh-Of $s) $s.X $s.Y $s.Z $s.M $s.Scale '#' $s.Color
     }
     foreach ($d in $script:Debris) {
         Project-Body $d.X $d.Y $d.Z
@@ -1603,7 +2252,7 @@ function Draw-Flight {
     }
     if ($script:LaserT -gt 0) {
         $dx = $script:Lx - $script:Px; $dy = $script:Ly - $script:Py; $dz = $script:Lz - $script:Pz
-        World-To-Local $script:M $dx $dy $dz
+        Cam-Local $dx $dy $dz
         Draw-ViewLine 0 0 0.9 $script:LocX $script:LocY $script:LocZ '|' 14
     }
     $border = [byte]6
@@ -1625,7 +2274,7 @@ function Draw-Flight {
 
     $sp = Speed-Of $script:Vx $script:Vy $script:Vz
     $legal = 'Clean'
-    if ($script:Legal -gt 15) { $legal = 'Fugitive' }
+    if ($script:Legal -gt 49) { $legal = 'Fugitive' }
     elseif ($script:Legal -gt 0) { $legal = 'Offender' }
     $cond = 'GREEN'
     $condCol = [byte]10
@@ -1638,17 +2287,33 @@ function Draw-Flight {
     if ($script:HitFlash -gt 0 -or $script:Witch) { $cond = 'RED'; $condCol = [byte]9 }
     if (-not $script:Witch -and (Speed-Of $script:Px $script:Py $script:Pz) -lt 1700) { $cond = 'GREEN'; $condCol = [byte]10 }
 
+    if ($script:Hull -lt 28 -or $script:Energy -lt 20) {
+        if (($script:Tick % 8) -lt 4) { $cond = 'RED'; $condCol = [byte]9 }
+    }
     $hy = $script:HudY
     Write-At 0 $hy ('-' * $script:W) 8 $script:W
     $line = "SPD $(F0 $sp)   FUEL $(F1 $script:Fuel) LY   CR $($script:Cash)   LEGAL $legal"
     Write-At 1 ($hy + 1) $line 7 ($script:W - 2)
-    $bars = "HULL $(Bar $script:Hull $script:HullMax 8) $(F0 $script:Hull)  SHD $(Bar $script:Shield $script:ShieldMax 8) $(F0 $script:Shield)  EN $(Bar $script:Energy $script:EnergyMax 8) $(F0 $script:Energy)  MSL $($script:Missiles)"
+    $e1 = Bar ([Math]::Min(25, [Math]::Max(0, $script:Energy))) 25 3
+    $e2 = Bar ([Math]::Min(25, [Math]::Max(0, $script:Energy - 25))) 25 3
+    $e3 = Bar ([Math]::Min(25, [Math]::Max(0, $script:Energy - 50))) 25 3
+    $e4 = Bar ([Math]::Min(25, [Math]::Max(0, $script:Energy - 75))) 25 3
+    $bars = "HULL $(Bar $script:Hull $script:HullMax 6)  SHF $(Bar $script:ShieldF $script:ShieldMax 4)  SHA $(Bar $script:ShieldA $script:ShieldMax 4)  EN $e1 $e2 $e3 $e4"
     Write-At 1 ($hy + 2) $bars 6 ($script:W - 2)
-    Write-At 1 ($hy + 3) "COND $cond" $condCol 12
-    if ($script:Witch) { Write-At 16 ($hy + 3) 'STN  none' 5 20 }
+    $kind = Laser-Kind
+    $arm = 'SAFE'
+    if ($script:MissileArm -eq 1) { $arm = 'ARM' }
+    elseif ($script:MissileArm -eq 2) { $arm = 'LOCK' }
+    $extra = "HEAT $(F0 $script:Heat)  TEMP $(F0 $script:Temp)  MSL $($script:Missiles) $arm  $($script:ViewName[$script:View]) $kind"
+    if ($script:JumpT -gt 0) { $extra += "  JUMP $([int][Math]::Ceiling($script:JumpT))" }
+    if ($script:InTorus) { $extra += '  TORUS' }
+    if ($script:CloakOn) { $extra += '  CLOAK' }
+    Write-At 1 ($hy + 3) $extra 6 ($script:W - 2)
+    Write-At 1 ($hy + 4) "COND $cond" $condCol 12
+    if ($script:Witch) { Write-At 16 ($hy + 4) 'STN  none' 5 20 }
     else {
         Get-Arrow
-        Write-At 16 ($hy + 3) "STN $(Format-Km $script:StationDist) $($script:Arrow)" 11 28
+        Write-At 16 ($hy + 4) "$($script:CompassWhat) $($script:CompassMark) $(Format-Km $script:StationDist) $($script:Arrow)" 11 32
     }
     $tname = 'none'
     foreach ($s in $script:Ships) {
@@ -1657,11 +2322,11 @@ function Draw-Flight {
             $tname = "$($s.Type) $(Format-Km $td) H$(F0 $s.Hull)"
         }
     }
-    Write-At 1 ($hy + 4) "TGT $tname" 7 40
-    if ($script:AutoDock) { Write-At 42 ($hy + 4) 'AUTODOCK' 14 10 }
+    Write-At 1 ($hy + 5) "TGT $tname" 7 40
+    if ($script:AutoDock) { Write-At 42 ($hy + 5) 'AUTODOCK' 14 10 }
     if ($script:W -ge 78) {
-        Write-At 1 ($hy + 6) 'Arrows turn  A thrust  Z brake  X retro  Space fire  M missile' 8 ($script:W - 20)
-        Write-At 1 ($hy + 7) 'D dock  J jump  C chart  G galaxy  T target  Esc pause' 8 ($script:W - 20)
+        Write-At 1 ($hy + 6) 'Arrows turn  A/Z/X thrust  Space laser  1-4 view  Y torus  T/F/U missile' 8 ($script:W - 2)
+        Write-At 1 ($hy + 7) 'D dock  J/H jump  C chart  G galaxy  E ecm  W bomb  Q pod  V cloak  B heavy' 8 ($script:W - 2)
     }
     Draw-Scanner
     if ($script:MsgT -gt 0 -and $script:Msg.Length -gt 0) {
@@ -1805,6 +2470,14 @@ function Read-FlightInput {
     $script:EdgeTarget = $false
     $script:EdgePause = $false
     $script:EdgeMissile = $false
+    $script:EdgeEcm = $false
+    $script:EdgeBomb = $false
+    $script:EdgeEscape = $false
+    $script:EdgeUnarm = $false
+    $script:EdgeHeavy = $false
+    $script:EdgeCloak = $false
+    $script:EdgeView = -1
+    $script:InTorus = $false
     if (-not $script:AsyncKeys) {
         while ([Console]::KeyAvailable) {
             $k = [Console]::ReadKey($true)
@@ -1821,7 +2494,19 @@ function Read-FlightInput {
             elseif ($k.Key -eq 'C') { $script:EdgeChart = $true }
             elseif ($k.Key -eq 'G') { $script:EdgeGal = $true }
             elseif ($k.Key -eq 'T') { $script:EdgeTarget = $true }
-            elseif ($k.Key -eq 'M') { $script:EdgeMissile = $true }
+            elseif ($k.Key -eq 'M' -or $k.Key -eq 'F') { $script:EdgeMissile = $true }
+            elseif ($k.Key -eq 'E') { $script:EdgeEcm = $true }
+            elseif ($k.Key -eq 'W') { $script:EdgeBomb = $true }
+            elseif ($k.Key -eq 'Q') { $script:EdgeEscape = $true }
+            elseif ($k.Key -eq 'U') { $script:EdgeUnarm = $true }
+            elseif ($k.Key -eq 'B') { $script:EdgeHeavy = $true }
+            elseif ($k.Key -eq 'V') { $script:EdgeCloak = $true }
+            elseif ($k.Key -eq 'Y') { $script:InTorus = $true }
+            elseif ($k.Key -eq 'H') { $script:EdgeJump = $true }
+            elseif ($k.Key -eq 'D1' -or $k.Key -eq 'NumPad1') { $script:EdgeView = 0 }
+            elseif ($k.Key -eq 'D2' -or $k.Key -eq 'NumPad2') { $script:EdgeView = 1 }
+            elseif ($k.Key -eq 'D3' -or $k.Key -eq 'NumPad3') { $script:EdgeView = 2 }
+            elseif ($k.Key -eq 'D4' -or $k.Key -eq 'NumPad4') { $script:EdgeView = 3 }
             elseif ($k.Key -eq 'Escape') { $script:EdgePause = $true }
         }
         return
@@ -1839,7 +2524,19 @@ function Read-FlightInput {
     $script:EdgeChart = Test-Edge 67
     $script:EdgeGal = Test-Edge 71
     $script:EdgeTarget = Test-Edge 84
-    $script:EdgeMissile = Test-Edge 77
+    $script:EdgeMissile = (Test-Edge 77) -or (Test-Edge 70)
+    $script:EdgeEcm = Test-Edge 69
+    $script:EdgeBomb = Test-Edge 87
+    $script:EdgeEscape = Test-Edge 81
+    $script:EdgeUnarm = Test-Edge 85
+    $script:EdgeHeavy = Test-Edge 66
+    $script:EdgeCloak = Test-Edge 86
+    $script:InTorus = Test-Key 89
+    if (Test-Edge 72) { $script:EdgeJump = $true }
+    if (Test-Edge 49) { $script:EdgeView = 0 }
+    if (Test-Edge 50) { $script:EdgeView = 1 }
+    if (Test-Edge 51) { $script:EdgeView = 2 }
+    if (Test-Edge 52) { $script:EdgeView = 3 }
     $script:EdgePause = Test-Edge 27
 }
 
@@ -1907,28 +2604,21 @@ function Show-Help([string]$back) {
         'The market screen names the best hop inside your fuel.',
         '',
         'FLIGHT',
-        '  Left / Right     roll',
-        '  Up / Down        pitch',
-        '  A / Z / X        thrust, brake, retro',
-        '  Space            lasers     M missile',
-        '  D                dock, or toggle the docking computer',
-        '  J                hyperspace to the chart target',
-        '  C / G            local chart / galactic chart',
-        '  T                cycle target     Esc pause',
+        '  Left/Right roll   Up/Down pitch   A thrust  Z brake  X retro',
+        '  1 front  2 rear  3 left  4 right. Space fires only that view.',
+        '  T lock missile   F or M launch   U unarm   E ECM   W energy bomb',
+        '  Y torus drive, mass-locked by ships, planet or sun',
+        '  D dock   J or H hyperspace (3 second count, J again aborts)',
+        '  C local chart   G galactic chart   Q escape pod   V cloak   B heavy',
         '',
         'DOCKING',
-        '  The cyan rectangle is the slot. Face it, creep in under 62,',
-        '  alignment above 72 percent, then press D.',
-        '  A docking computer (1,500 CR) flies the approach for you.',
+        '  The cyan slot faces the planet. Creep in under 62, aligned,',
+        '  and roll until the wings are level. A scrape costs shields.',
         '',
-        'JUMPS',
-        '  Fuel is light-years, tank of 7. Set a target on the chart,',
-        '  fly clear of the station and planet, then press J.',
-        '  About one jump in eleven tears into witch-space.',
-        '',
-        'Contraband: Narcotics and Firearms. Lawful stations seize them.',
-        'A save is written every time you dock.',
-        '',
+        'You start at Lave: 100 CR, 7 LY, front pulse, three missiles.',
+        'Contraband: Slaves, Narcotics, Firearms.',
+        'Fuel scoop the sun. Mining laser plus scoops breaks asteroids.',
+        'Galactic hyperdrive is one jump. ECM kills every missile.',
         'Press any key.'
     )
     while ($true) {
@@ -2005,7 +2695,7 @@ function Paint-Docked([int]$sel) {
         if ($i -eq $sel) { $prefix = ' > '; $col = [byte]14 }
         $label = "$prefix$($i + 1). $($items[$i])"
         if ($i -eq 6) {
-            $cost = [int][Math]::Ceiling((7.0 - $script:Fuel) * 8)
+            $cost = [int][Math]::Ceiling((7.0 - $script:Fuel) * 2)
             if ($cost -lt 0) { $cost = 0 }
             $label = "$prefix$($i + 1). Refuel ($cost CR)"
         }
@@ -2021,7 +2711,7 @@ function Paint-Docked([int]$sel) {
 function Buy-Fuel {
     $need = 7.0 - $script:Fuel
     if ($need -lt 0.05) { Say 'Fuel tanks are full.'; return }
-    $cost = [int][Math]::Ceiling($need * 8)
+    $cost = [int][Math]::Ceiling($need * 2)
     if ($script:Cash -lt $cost) { Say "Refuel costs $cost CR."; return }
     $script:Cash -= $cost
     $script:Fuel = 7.0
@@ -2125,14 +2815,23 @@ function Show-Market {
 }
 
 function Equip-Rows {
+    $mount = $script:ViewName[$script:FitMount]
+    $fitted = [string]$script:Laser[$script:FitMount]
     $rows = New-Object System.Collections.Generic.List[object]
-    $rows.Add(@{ Id = 'beam'; Name = 'Beam laser'; Price = 4000; Have = $script:Beam; Note = $(if ($script:Beam) { 'fitted' } else { '' }) })
-    $rows.Add(@{ Id = 'dock'; Name = 'Docking computer'; Price = 1500; Have = $script:DockComp; Note = $(if ($script:DockComp) { 'fitted' } else { '' }) })
-    $rows.Add(@{ Id = 'shield'; Name = 'Shield booster'; Price = 2500; Have = ($script:ShieldMax -ge 180); Note = $(if ($script:ShieldMax -ge 180) { 'fitted' } else { '' }) })
-    $rows.Add(@{ Id = 'gal'; Name = 'Galactic hyperdrive'; Price = 5000; Have = $script:GalDrive; Note = $(if ($script:GalDrive) { 'fitted' } else { '' }) })
-    $cargoFull = $script:CargoMax -ge 35
-    $rows.Add(@{ Id = 'cargo'; Name = 'Cargo bay +5t'; Price = 400; Have = $cargoFull; Note = "$($script:CargoMax)t" })
-    $rows.Add(@{ Id = 'missile'; Name = 'Missile'; Price = 30; Have = ($script:Missiles -ge 4); Note = "$($script:Missiles)/4" })
+    $rows.Add(@{ Id = 'mount'; Name = "Mount $mount"; Price = 0; Tech = 0; Have = $false; Note = $fitted })
+    $rows.Add(@{ Id = 'pulse'; Name = 'Pulse laser'; Price = 400; Tech = 3; Have = ($fitted -eq 'pulse'); Note = 'tech 3' })
+    $rows.Add(@{ Id = 'beam'; Name = 'Beam laser'; Price = 1000; Tech = 4; Have = ($fitted -eq 'beam'); Note = 'tech 4' })
+    $rows.Add(@{ Id = 'military'; Name = 'Military laser'; Price = 6000; Tech = 10; Have = ($fitted -eq 'military'); Note = 'tech 10' })
+    $rows.Add(@{ Id = 'mining'; Name = 'Mining laser'; Price = 800; Tech = 10; Have = ($fitted -eq 'mining'); Note = 'tech 10' })
+    $rows.Add(@{ Id = 'ecm'; Name = 'ECM system'; Price = 600; Tech = 2; Have = $script:ECM; Note = 'tech 2' })
+    $rows.Add(@{ Id = 'scoop'; Name = 'Fuel scoops'; Price = 525; Tech = 5; Have = $script:Scoops; Note = 'tech 5' })
+    $rows.Add(@{ Id = 'pod'; Name = 'Escape pod'; Price = 1000; Tech = 6; Have = $script:EscapePod; Note = 'tech 6' })
+    $rows.Add(@{ Id = 'bomb'; Name = 'Energy bomb'; Price = 900; Tech = 7; Have = ($script:Bomb -gt 0); Note = 'tech 7' })
+    $rows.Add(@{ Id = 'energy'; Name = 'Extra energy unit'; Price = 1500; Tech = 8; Have = $script:EnergyUnit; Note = 'tech 8' })
+    $rows.Add(@{ Id = 'dock'; Name = 'Docking computer'; Price = 1500; Tech = 9; Have = $script:DockComp; Note = 'tech 9' })
+    $rows.Add(@{ Id = 'gal'; Name = 'Galactic hyperdrive'; Price = 5000; Tech = 10; Have = $false; Note = "charges $($script:GalCharges)" })
+    $rows.Add(@{ Id = 'cargo'; Name = 'Large cargo bay'; Price = 400; Tech = 0; Have = ($script:CargoMax -ge 35); Note = "$($script:CargoMax)t" })
+    $rows.Add(@{ Id = 'missile'; Name = 'Missile'; Price = 30; Tech = 0; Have = ($script:Missiles -ge 4); Note = "$($script:Missiles)/4" })
     return $rows
 }
 
@@ -2145,7 +2844,8 @@ function Show-Equip {
         Clear-Frame
         Write-At 1 0 'EQUIPMENT' 14 20
         Write-At ($script:W - 18) 0 "CR $($script:Cash)" 11 16
-        Write-At 1 2 'Pulse laser is already fitted.' 8 40
+        $techHere = $script:Systems[$script:Sys].Tech
+        Write-At 1 2 "Station tech $techHere. Lasers fit the mount on the first line. Enter cycles it." 8 ($script:W - 2)
         for ($i = 0; $i -lt $rows.Count; $i++) {
             $r = $rows[$i]
             $mark = ' '
@@ -2165,16 +2865,39 @@ function Show-Equip {
         elseif ($k.Key -eq 'Escape') { $script:MsgT = 0; return }
         elseif ($k.Key -eq 'Enter' -or $k.Key -eq 'Spacebar') {
             $r = $rows[$sel]
-            if ($r.Have -and $r.Id -ne 'missile') { Say 'Already fitted.'; continue }
-            if ($script:Cash -lt [int]$r.Price) { Say 'Not enough credits.'; continue }
+            if ($r.Id -eq 'mount') {
+                $script:FitMount++
+                if ($script:FitMount -gt 3) { $script:FitMount = 0 }
+                Say "Lasers will fit the $($script:ViewName[$script:FitMount]) mount."
+                continue
+            }
+            $techHere = $script:Systems[$script:Sys].Tech
+            if ([int]$r.Tech -gt $techHere) { Say "Needs tech $($r.Tech). This station is $techHere."; continue }
+            if ($r.Have -and $r.Id -ne 'missile' -and $r.Id -ne 'gal' -and $r.Id -ne 'bomb') { Say 'Already fitted.'; continue }
+            $price = [int]$r.Price
+            if ($r.Id -eq 'pulse' -or $r.Id -eq 'beam' -or $r.Id -eq 'military' -or $r.Id -eq 'mining') {
+                $price -= Laser-Worth ([string]$script:Laser[$script:FitMount])
+                if ($price -lt 0) { $price = 0 }
+            }
+            if ($script:Cash -lt $price) { Say 'Not enough credits.'; continue }
             switch ($r.Id) {
-                'beam' { $script:Beam = $true; $script:Cash -= 4000; Say 'Beam laser fitted.' }
+                'pulse' { $script:Laser[$script:FitMount] = 'pulse'; $script:Cash -= $price; Sync-LaserFlag; Say 'Pulse laser fitted.' }
+                'beam' { $script:Laser[$script:FitMount] = 'beam'; $script:Cash -= $price; Sync-LaserFlag; Say 'Beam laser fitted.' }
+                'military' { $script:Laser[$script:FitMount] = 'military'; $script:Cash -= $price; Sync-LaserFlag; Say 'Military laser fitted.' }
+                'mining' { $script:Laser[$script:FitMount] = 'mining'; $script:Cash -= $price; Sync-LaserFlag; Say 'Mining laser fitted.' }
+                'ecm' { $script:ECM = $true; $script:Cash -= 600; Say 'ECM fitted. Press E.' }
+                'scoop' { $script:Scoops = $true; $script:Cash -= 525; Say 'Fuel scoops fitted. Skim the sun, or the lower view.' }
+                'pod' { $script:EscapePod = $true; $script:Cash -= 1000; Say 'Escape pod fitted. Press Q.' }
+                'bomb' {
+                    if ($script:Bomb -gt 0) { Say 'A bomb is already aboard.' }
+                    else { $script:Bomb = 1; $script:Cash -= 900; Say 'Energy bomb aboard. Press W. One shot.' }
+                }
+                'energy' { $script:EnergyUnit = $true; $script:Cash -= 1500; Say 'Extra energy unit fitted. Recharge doubled.' }
                 'dock' { $script:DockComp = $true; $script:Cash -= 1500; Say 'Docking computer fitted.' }
-                'shield' { $script:ShieldMax = 200; $script:Shield = 200; $script:Cash -= 2500; Say 'Shields boosted.' }
-                'gal' { $script:GalDrive = $true; $script:Cash -= 5000; Say 'Galactic hyperdrive fitted. Press H on the galactic chart.' }
+                'gal' { $script:GalCharges++; $script:GalDrive = $true; $script:Cash -= 5000; Say 'Galactic hyperdrive loaded. One jump. H on the galactic chart.' }
                 'cargo' {
                     if ($script:CargoMax -ge 35) { Say 'Hold is already 35t.' }
-                    else { $script:CargoMax += 5; $script:Cash -= 400; Say "Hold is $($script:CargoMax)t." }
+                    else { $script:CargoMax = 35; $script:Cash -= 400; Say 'Large cargo bay fitted. Hold is 35t.' }
                 }
                 'missile' {
                     if ($script:Missiles -ge 4) { Say 'Magazine full.' }
@@ -2386,9 +3109,22 @@ function Show-Flight {
             $clock.Restart()
             continue
         }
+        if ($script:EdgeView -ge 0) {
+            $script:View = $script:EdgeView
+            Say "$($script:ViewName[$script:View]) view."
+        }
+        if ($script:EdgeEcm) { Try-ECM }
+        if ($script:EdgeBomb) { Try-Bomb }
+        if ($script:EdgeEscape) { Try-Escape }
+        if ($script:EdgeUnarm) { $script:MissileArm = 0; Say 'Missiles safe.' }
+        if ($script:EdgeHeavy) { Try-Heavy }
+        if ($script:EdgeCloak) {
+            if (-not $script:HasCloak) { Say 'No cloaking device.' }
+            else { $script:CloakOn = -not $script:CloakOn; Say $(if ($script:CloakOn) { 'Cloak on.' } else { 'Cloak off.' }) }
+        }
         if ($script:EdgeDock) { Try-Dock }
         if ($script:EdgeJump) { Try-Jump }
-        if ($script:EdgeTarget) { Cycle-Target }
+        if ($script:EdgeTarget) { Arm-Missile }
         if ($script:EdgeMissile) { Try-Missile }
         $state = Update-Flight $dt
         if ($state -eq 'docked') {
@@ -2454,7 +3190,12 @@ function Invoke-SelfTest {
     }
     Check ($names.Count -gt 200) 'unique names'
     $homeSys = $script:Systems[$script:Sys]
+    Check ($homeSys.Name -eq 'Lave') 'home is Lave'
     Check ($homeSys.Eco -ge 4) 'home is agricultural'
+    Check ($script:Missiles -eq 3) 'three missiles'
+    Check ((Get-RankName 8) -eq 'Mostly Harmless') 'rank 8'
+    Check ((Get-RankName 512) -eq 'Dangerous') 'rank dangerous'
+    Check ((Get-RankName 6400) -eq 'Elite') 'rank elite'
     $foundInd = $false
     for ($j = 0; $j -lt 256; $j++) {
         if ($j -eq $script:Sys) { continue }
@@ -2462,7 +3203,7 @@ function Invoke-SelfTest {
     }
     Check $foundInd 'industrial neighbour in fuel range'
     Refresh-Market
-    Check ($script:Market.Count -eq 15) 'market rows'
+    Check ($script:Market.Count -eq 17) 'market rows'
     $food = $script:Market[0]
     Check ($food.Price -ge 1 -and $food.Price -le 80) "food price $($food.Price)"
     $script:Cash = 500
@@ -2512,6 +3253,28 @@ function Invoke-SelfTest {
     $sampleCol = New-Object 'byte[]' 2
     [EliteBraille.Raster]::Stamp($sample, 4, $sampleBuf, $sampleCol, 2, 0, 1, $script:Pri)
     Check (([int]$sampleBuf[0]) -eq (0x2800 + 0x09)) 'braille dot pattern'
+    Set-Identity $script:M
+    $script:View = 1
+    Sync-Camera
+    Check ($script:Cam[8] -lt -0.9) "rear view $($script:Cam[8])"
+    $script:View = 2
+    Sync-Camera
+    Check ($script:Cam[6] -lt -0.9) "left view $($script:Cam[6])"
+    $script:View = 0
+    Sync-Camera
+    $script:ECM = $true
+    $script:Energy = 40
+    if ($null -eq $script:Bolts) { $script:Bolts = New-Object System.Collections.Generic.List[object] }
+    $script:Bolts.Clear()
+    $script:Bolts.Add(@{ X = 0; Y = 0; Z = 0; VX = 0; VY = 0; VZ = 0; Life = 3.0; Target = -2; Heavy = $false })
+    Try-ECM
+    Check ($script:Bolts.Count -eq 0) 'ecm clears missiles'
+    Check ($script:Laser[0] -eq 'pulse') 'front pulse'
+    $script:View = 3
+    $script:Laser[3] = 'military'
+    Check ((Laser-Kind) -eq 'military') 'right military'
+    $script:View = 0
+    $script:Laser[3] = 'none'
     Paint-Docked 0
     Paint-Market 0
 

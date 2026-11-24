@@ -140,6 +140,7 @@ $script:Goods = @(
 # The Coriolis is scaled by 3.5 so the docking face sits 560 m out. It rolls about that face.
 # N is the face plane: direction and distance from the centre. A names the two faces of each edge.
 # An edge is drawn when the eye is near enough and on the outside of one of those faces.
+# NS is the blueprint scale: up close the plane offset is |N|^2 / 2^NS, as in LL9.
 # FV and EV are the original distances, on the 0-31 scale, past which a face is kept and an edge is dropped.
 # A Thargon keeps the canister edge list, the way the cassette blueprint does.
 $script:MeshSide = @{
@@ -164,6 +165,7 @@ $script:MeshSide = @{
     )
     FV = [int[]]@(31, 31, 31, 31, 31, 31, 31)
     EV = [int[]]@(31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 15, 12, 12, 12)
+    NS = 2
 }
 $script:MeshViper = @{
     V = [double[]]@(
@@ -190,6 +192,7 @@ $script:MeshViper = @{
     )
     FV = [int[]]@(31, 31, 31, 31, 31, 31, 31)
     EV = [int[]]@(31, 30, 30, 31, 30, 30, 30, 30, 31, 30, 31, 30, 31, 30, 19, 18, 19, 18, 16, 16)
+    NS = 1
 }
 $script:MeshCobra = @{
     V = [double[]]@(
@@ -227,6 +230,7 @@ $script:MeshCobra = @{
     )
     FV = [int[]]@(31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31)
     EV = [int[]]@(31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 29, 29, 6, 20, 20, 20, 20, 19, 17, 19, 19, 30, 6, 6, 8, 6, 6, 8)
+    NS = 1
 }
 $script:MeshAdder = @{
     V = [double[]]@(
@@ -258,6 +262,7 @@ $script:MeshAdder = @{
     )
     FV = [int[]]@(31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31)
     EV = [int[]]@(31, 7, 31, 31, 31, 31, 31, 7, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 5, 3, 4, 3)
+    NS = 2
 }
 $script:MeshKrait = @{
     V = [double[]]@(
@@ -284,6 +289,7 @@ $script:MeshKrait = @{
     )
     FV = [int[]]@(31, 31, 31, 31, 31, 31)
     EV = [int[]]@(31, 31, 31, 31, 31, 31, 31, 31, 30, 30, 8, 9, 6, 9, 6, 8, 8, 7, 7, 8, 8)
+    NS = 1
 }
 $script:MeshAsp = @{
     V = [double[]]@(
@@ -315,6 +321,7 @@ $script:MeshAsp = @{
     )
     FV = [int[]]@(31, 31, 31, 22, 31, 31, 31, 31, 31, 31, 31, 31)
     EV = [int[]]@(22, 22, 22, 31, 31, 16, 31, 16, 31, 31, 31, 31, 31, 31, 31, 31, 22, 22, 22, 31, 31, 31, 31, 10, 9, 8, 8, 10)
+    NS = 1
 }
 $script:MeshFdl = @{
     V = [double[]]@(
@@ -346,6 +353,7 @@ $script:MeshFdl = @{
     )
     FV = [int[]]@(28, 31, 31, 31, 31, 31, 28, 28, 28, 31)
     EV = [int[]]@(31, 31, 31, 31, 31, 28, 28, 28, 28, 28, 15, 11, 11, 15, 14, 14, 14, 14, 8, 9, 11, 8, 9, 11, 12, 12, 8)
+    NS = 1
 }
 $script:MeshPython = @{
     V = [double[]]@(
@@ -375,6 +383,7 @@ $script:MeshPython = @{
     )
     FV = [int[]]@(31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31)
     EV = [int[]]@(31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 7, 7, 7, 7, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31)
+    NS = 0
 }
 $script:MeshThargoid = @{
     V = [double[]]@(
@@ -406,6 +415,7 @@ $script:MeshThargoid = @{
     )
     FV = [int[]]@(31, 31, 31, 31, 31, 31, 31, 31, 31, 31)
     EV = [int[]]@(31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 30, 30)
+    NS = 2
 }
 $script:MeshThargon = @{
     V = [double[]]@(
@@ -427,6 +437,7 @@ $script:MeshThargon = @{
         0, 1, 0, 2, 0, 3, 0, 4, 0, 5, 1, 5, 1, 2, 2, 3, 
         3, 4, 4, 5, 1, 6, 2, 6, 3, 6, 4, 6, 5, 6
     )
+    NS = 2
 }
 $script:MeshRock = @{
     V = [double[]]@(
@@ -451,6 +462,7 @@ $script:MeshRock = @{
         0, 1, 0, 6, 4, 5, 0, 2, 5, 6, 8, 10, 7, 8, 7, 13, 
         12, 13, 9, 12, 9, 11, 10, 11, 8, 9
     )
+    NS = 1
 }
 $script:MeshCan = @{
     V = [double[]]@(
@@ -472,6 +484,7 @@ $script:MeshCan = @{
         0, 1, 0, 2, 0, 3, 0, 4, 0, 5, 1, 5, 1, 2, 2, 3, 
         3, 4, 4, 5, 1, 6, 2, 6, 3, 6, 4, 6, 5, 6
     )
+    NS = 2
 }
 $script:MeshMissile = @{
     V = [double[]]@(
@@ -499,6 +512,7 @@ $script:MeshMissile = @{
     )
     FV = [int[]]@(31, 31, 31, 31, 31, 31, 31, 31, 31)
     EV = [int[]]@(31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 8, 8, 8, 8, 8, 8, 8, 8)
+    NS = 2
 }
 $script:MeshStation = @{
     V = [double[]]@(
@@ -526,6 +540,7 @@ $script:MeshStation = @{
         3, 8, 3, 7, 4, 7, 4, 5, 10, 13, 11, 13, 12, 13, 9, 13, 
         5, 10, 6, 10, 6, 11, 8, 11, 8, 12, 7, 12, 7, 9, 5, 9
     )
+    NS = 0
 }
 $script:MeshPort = @{
     V = [double[]]@(
@@ -536,6 +551,7 @@ $script:MeshPort = @{
     A = [int[]]@(0, 0, 0, 0, 0, 0, 0, 0)
     FV = [int[]]@(31)
     EV = [int[]]@(30, 30, 30, 30)
+    NS = 0
 }
 
 function F0([double]$n) { return ([Math]::Round($n)).ToString($script:Inv) }
@@ -2545,6 +2561,17 @@ function Draw-Mesh($mesh, [double]$ox, [double]$oy, [double]$oz, [double[]]$rm, 
         $far = [int]($ahead / 256.0)
         if ($far -lt 0) { $far = 0 }
         if ($far -gt 31) { $far = 31 }
+        $ns = 0
+        if ($mesh.ContainsKey('NS')) { $ns = [int]$mesh.NS }
+        $shift = 0
+        $az = [Math]::Abs($ahead)
+        while ($az -ge 256.0 -and $shift -lt 12) {
+            $az *= 0.5
+            $shift++
+        }
+        $useOffset = (($ns + $shift) -lt 4)
+        $off = 1.0
+        if ($useOffset -and $ns -gt 0) { $off = [Math]::Pow(2.0, $ns) }
         $fv = $null
         if ($mesh.ContainsKey('FV')) { $fv = $mesh.FV }
         for ($i = 0; $i -lt $nf; $i++) {
@@ -2554,7 +2581,12 @@ function Draw-Mesh($mesh, [double]$ox, [double]$oy, [double]$oz, [double[]]$rm, 
             $nx = $norms[$i * 3] * $scale
             $ny = $norms[$i * 3 + 1] * $scale
             $nz = $norms[$i * 3 + 2] * $scale
-            $dot = ($qx + $nx) * $nx + ($qy + $ny) * $ny + ($qz + $nz) * $nz
+            if ($useOffset) {
+                $dot = ($qx + $nx / $off) * $nx + ($qy + $ny / $off) * $ny + ($qz + $nz / $off) * $nz
+            }
+            else {
+                $dot = $qx * $nx + $qy * $ny + $qz * $nz
+            }
             $vis[$i] = ($dot -lt 0)
         }
     }

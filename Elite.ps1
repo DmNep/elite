@@ -141,6 +141,8 @@ $script:Goods = @(
 # N points out of the face. A names the two faces of each edge.
 # An edge is drawn when the eye is near enough and on the outside of one of those polygons.
 # The polygon itself is the plane: the blueprint normal only chooses the outside.
+# A face that also carries fin tips keeps the plane of the panel most vertices share.
+# A fin tip sticks out of that panel. Its edges stay up together while any of its faces does.
 # NS is the original normal scale. It is not used for culling.
 # US is the coordinate scale. The Coriolis vertices are 3.5 times the blueprint, so its
 # distance is divided back before the original 256-unit shift.
@@ -2284,7 +2286,7 @@ function Set-Frame([int]$w, [int]$h) {
     if ($null -eq $script:Sb) { $script:Sb = New-Object System.Text.StringBuilder ($n + 512) }
 }
 
-function Sync-Console {
+function Get-ConsoleSize {
     $w = 80
     $h = 30
     try {
@@ -2294,13 +2296,32 @@ function Sync-Console {
     catch { }
     if ($w -lt 40) { $w = 40 }
     if ($h -lt 16) { $h = 16 }
-    if ($w -gt 200) { $w = 200 }
-    if ($h -gt 64) { $h = 64 }
+    if ($w -gt 420) { $w = 420 }
+    if ($h -gt 160) { $h = 160 }
+    $pair = New-Object 'int[]' 2
+    $pair[0] = $w
+    $pair[1] = $h
+    return ,$pair
+}
+
+function Sync-Console {
+    $size = Get-ConsoleSize
+    $w = $size[0]
+    $h = $size[1]
     if ($script:W -eq $w -and $script:H -eq $h -and $null -ne $script:Buf) { return }
     $redraw = ($null -ne $script:Buf -and $script:ConsoleOn)
     Set-Frame $w $h
     if ($redraw) {
         try { [Console]::Clear() } catch { }
+    }
+}
+
+function Read-MenuKey {
+    while ($true) {
+        $size = Get-ConsoleSize
+        if ($size[0] -ne $script:W -or $size[1] -ne $script:H) { return $null }
+        if ([Console]::KeyAvailable) { return [Console]::ReadKey($true) }
+        Start-Sleep -Milliseconds 40
     }
 }
 
@@ -2332,6 +2353,28 @@ function Write-Mid([int]$y, [string]$text, [byte]$color) {
     $x = [int](($script:W - $text.Length) / 2)
     if ($x -lt 0) { $x = 0 }
     Write-At $x $y $text $color $script:W
+}
+
+function Get-PanelOrigin([int]$cols, [int]$rows) {
+    if ($cols -lt 1) { $cols = 1 }
+    if ($rows -lt 1) { $rows = 1 }
+    if ($cols -gt $script:W) { $cols = $script:W }
+    if ($rows -gt $script:H) { $rows = $script:H }
+    $x = [int](($script:W - $cols) / 2)
+    $y = [int](($script:H - $rows) / 2)
+    if ($x -lt 0) { $x = 0 }
+    if ($y -lt 0) { $y = 0 }
+    $pair = New-Object 'int[]' 2
+    $pair[0] = $x
+    $pair[1] = $y
+    return ,$pair
+}
+
+function Write-PanelHead([int]$x, [int]$y, [int]$cols, [string]$left, [byte]$leftColor, [string]$right, [byte]$rightColor) {
+    Write-At $x $y $left $leftColor $cols
+    $rx = $x + $cols - $right.Length
+    if ($rx -lt $x + $left.Length + 1) { $rx = $x + $left.Length + 1 }
+    Write-At $rx $y $right $rightColor $cols
 }
 
 function Enable-Braille {
@@ -2527,6 +2570,15 @@ function Project-Body([double]$wx, [double]$wy, [double]$wz) {
     $script:BodyY = $script:DY - ($script:LocY / $script:LocZ) * $script:DotSY
 }
 
+function Get-MidDot([double[]]$vals) {
+    $n = $vals.Length
+    if ($n -le 0) { return 0.0 }
+    $sorted = @($vals | Sort-Object)
+    $mid = [int][Math]::Floor($n / 2)
+    if (($n % 2) -eq 1) { return [double]$sorted[$mid] }
+    return (([double]$sorted[$mid - 1] + [double]$sorted[$mid]) / 2.0)
+}
+
 function Ensure-Planes($mesh) {
     if ($mesh.ContainsKey('PD')) { return }
     $norms = $mesh.N
@@ -2605,6 +2657,24 @@ function Ensure-Planes($mesh) {
                 if ($gn -gt 0.001) { $usePoly = $true }
             }
         }
+        $spread = 0.0
+        if ($bag.Count -gt 0) {
+            $snx = [double]$norms[$f * 3]
+            $sny = [double]$norms[$f * 3 + 1]
+            $snz = [double]$norms[$f * 3 + 2]
+            $sn = [Math]::Sqrt($snx * $snx + $sny * $sny + $snz * $snz)
+            $minD = 1.0e99
+            $maxD = -1.0e99
+            foreach ($vi in $bag) {
+                $d = [double]$verts[$vi * 3] * $snx
+                $d += [double]$verts[$vi * 3 + 1] * $sny
+                $d += [double]$verts[$vi * 3 + 2] * $snz
+                if ($d -lt $minD) { $minD = $d }
+                if ($d -gt $maxD) { $maxD = $d }
+            }
+            if ($sn -gt 0.001) { $spread = ($maxD - $minD) / $sn }
+        }
+        if ($spread -gt 1.5) { $usePoly = $false }
         if ($usePoly) {
             $sd = $gx * $nx + $gy * $ny + $gz * $nz
             if ($sd -lt 0) {
@@ -2616,16 +2686,17 @@ function Ensure-Planes($mesh) {
             $ny = $gy
             $nz = $gz
         }
-        $sum = 0.0
-        $count = 0
+        $dots = New-Object 'double[]' $bag.Count
+        $di = 0
         foreach ($vi in $bag) {
-            $sum += [double]$verts[$vi * 3] * $nx
-            $sum += [double]$verts[$vi * 3 + 1] * $ny
-            $sum += [double]$verts[$vi * 3 + 2] * $nz
-            $count++
+            $d = [double]$verts[$vi * 3] * $nx
+            $d += [double]$verts[$vi * 3 + 1] * $ny
+            $d += [double]$verts[$vi * 3 + 2] * $nz
+            $dots[$di] = $d
+            $di++
         }
         $plane = $nx * $nx + $ny * $ny + $nz * $nz
-        if ($count -gt 0) { $plane = $sum / $count }
+        if ($di -gt 0) { $plane = Get-MidDot $dots }
         $pn[$f * 3] = $nx
         $pn[$f * 3 + 1] = $ny
         $pn[$f * 3 + 2] = $nz
@@ -2633,6 +2704,61 @@ function Ensure-Planes($mesh) {
     }
     $mesh.PN = $pn
     $mesh.PD = $pd
+}
+
+function Ensure-Fins($mesh) {
+    if ($mesh.ContainsKey('Fins')) { return }
+    Ensure-Planes $mesh
+    $verts = $mesh.V
+    $edges = $mesh.E
+    $adj = $mesh.A
+    $pn = $mesh.PN
+    $pd = $mesh.PD
+    $nv = [int]($verts.Length / 3)
+    $ne = [int]($edges.Length / 2)
+    $touch = @()
+    for ($i = 0; $i -lt $nv; $i++) {
+        $touch += ,(New-Object 'System.Collections.Generic.List[int]')
+    }
+    for ($ei = 0; $ei -lt $ne; $ei++) {
+        [void]$touch[[int]$edges[$ei * 2]].Add($ei)
+        [void]$touch[[int]$edges[$ei * 2 + 1]].Add($ei)
+    }
+    $fins = New-Object System.Collections.Generic.List[object]
+    for ($v = 0; $v -lt $nv; $v++) {
+        if ($touch[$v].Count -ne 2) { continue }
+        $maxOut = 0.0
+        $inside = $false
+        $seen = @{}
+        foreach ($ei in $touch[$v]) {
+            foreach ($f in @([int]$adj[$ei * 2], [int]$adj[$ei * 2 + 1])) {
+                if ($seen.ContainsKey($f)) { continue }
+                $seen[$f] = $true
+                $nx = [double]$pn[$f * 3]
+                $ny = [double]$pn[$f * 3 + 1]
+                $nz = [double]$pn[$f * 3 + 2]
+                $nn = [Math]::Sqrt($nx * $nx + $ny * $ny + $nz * $nz)
+                if ($nn -lt 0.001) { continue }
+                $dot = [double]$verts[$v * 3] * $nx
+                $dot += [double]$verts[$v * 3 + 1] * $ny
+                $dot += [double]$verts[$v * 3 + 2] * $nz
+                $side = ($dot - [double]$pd[$f]) / $nn
+                if ($side -gt $maxOut) { $maxOut = $side }
+                if ($side -lt -0.4) { $inside = $true }
+            }
+        }
+        if ($inside -or $maxOut -lt 1.5) { continue }
+        $faceList = New-Object 'System.Collections.Generic.List[int]'
+        $edgeList = New-Object 'System.Collections.Generic.List[int]'
+        foreach ($ei in $touch[$v]) {
+            [void]$edgeList.Add([int]$ei)
+            foreach ($f in @([int]$adj[$ei * 2], [int]$adj[$ei * 2 + 1])) {
+                if (-not $faceList.Contains([int]$f)) { [void]$faceList.Add([int]$f) }
+            }
+        }
+        [void]$fins.Add(@{ E = $edgeList.ToArray(); F = $faceList.ToArray() })
+    }
+    $mesh.Fins = $fins
 }
 
 function Draw-Mesh($mesh, [double]$ox, [double]$oy, [double]$oz, [double[]]$rm, [double]$scale, [char]$ch, [byte]$color) {
@@ -2696,9 +2822,22 @@ function Draw-Mesh($mesh, [double]$ox, [double]$oy, [double]$oz, [double[]]$rm, 
     }
     $adj = $null
     $ev = $null
+    $finOn = $null
     if ($null -ne $vis) {
         $adj = $mesh.A
         if ($mesh.ContainsKey('EV')) { $ev = $mesh.EV }
+        Ensure-Fins $mesh
+        if ($mesh.Fins.Count -gt 0) {
+            $finOn = New-Object 'bool[]' ([int]($edges.Length / 2))
+            foreach ($fin in $mesh.Fins) {
+                $hot = $false
+                foreach ($f in $fin.F) {
+                    if ($f -ge 0 -and $f -lt $vis.Length -and $vis[$f]) { $hot = $true; break }
+                }
+                if (-not $hot) { continue }
+                foreach ($ei in $fin.E) { $finOn[$ei] = $true }
+            }
+        }
     }
     for ($e = 0; $e -lt $edges.Length; $e += 2) {
         if ($null -ne $vis) {
@@ -2708,6 +2847,7 @@ function Draw-Mesh($mesh, [double]$ox, [double]$oy, [double]$oz, [double[]]$rm, 
             $show = $false
             if ($f1 -ge 0 -and $f1 -lt $vis.Length -and $vis[$f1]) { $show = $true }
             elseif ($f2 -ge 0 -and $f2 -lt $vis.Length -and $f2 -ne $f1 -and $vis[$f2]) { $show = $true }
+            if (-not $show -and $null -ne $finOn -and $finOn[$ei]) { $show = $true }
             if (-not $show) { continue }
         }
         $a = $edges[$e]; $b = $edges[$e + 1]
@@ -3316,29 +3456,34 @@ function Dump-Frame([string]$path) {
 
 function Paint-Title {
     Clear-Frame
-    Write-Mid 2 'E L I T E' 14
-    Write-Mid 3 'space trade and combat' 6
-    Write-Mid 5 'Unofficial console remake of the 1984 game.' 8
-    Write-Mid 6 'A Cobra Mk III, a procedural galaxy, a station to dock.' 7
-    $y = 9
-    $last = $y + 3
-    if (Test-Path $script:SavePath) {
-        Write-Mid $y 'N  new commander' 15
-        Write-Mid ($y + 1) 'L  load commander' 15
-        Write-Mid ($y + 2) 'H  how to fly' 15
-        Write-Mid ($y + 3) 'P  presentation' 15
-        Write-Mid ($y + 4) 'Q  quit' 15
-        $last = $y + 4
+    $lines = New-Object System.Collections.Generic.List[object]
+    [void]$lines.Add(@{ T = 'E L I T E'; C = [byte]14 })
+    [void]$lines.Add(@{ T = 'space trade and combat'; C = [byte]6 })
+    [void]$lines.Add(@{ T = ''; C = [byte]7 })
+    [void]$lines.Add(@{ T = 'Unofficial console remake of the 1984 game.'; C = [byte]8 })
+    [void]$lines.Add(@{ T = 'A Cobra Mk III, a procedural galaxy, a station to dock.'; C = [byte]7 })
+    [void]$lines.Add(@{ T = ''; C = [byte]7 })
+    [void]$lines.Add(@{ T = 'N  new commander'; C = [byte]15 })
+    if (Test-Path $script:SavePath) { [void]$lines.Add(@{ T = 'L  load commander'; C = [byte]15 }) }
+    [void]$lines.Add(@{ T = 'H  how to fly'; C = [byte]15 })
+    [void]$lines.Add(@{ T = 'P  presentation'; C = [byte]15 })
+    [void]$lines.Add(@{ T = 'Q  quit'; C = [byte]15 })
+    $rows = $lines.Count
+    $showHint = $false
+    if ($script:H -ge ($rows + 4)) {
+        $showHint = $true
+        $rows = $rows + 2
     }
-    else {
-        Write-Mid $y 'N  new commander' 15
-        Write-Mid ($y + 1) 'H  how to fly' 15
-        Write-Mid ($y + 2) 'P  presentation' 15
-        Write-Mid ($y + 3) 'Q  quit' 15
+    $y = [int](($script:H - $rows) / 2)
+    if ($y -lt 0) { $y = 0 }
+    foreach ($line in $lines) {
+        if ($y -ge $script:H) { break }
+        if ($line.T.Length -gt 0) { Write-Mid $y $line.T $line.C }
+        $y++
     }
-    $hintY = $script:H - 3
-    if ($hintY -gt $last) {
-        Write-Mid $hintY 'The view follows the window. 80x30 is comfortable.' 8
+    $script:MenuBottom = $y
+    if ($showHint -and ($y + 1) -lt $script:H) {
+        Write-Mid ($y + 1) 'The view follows the window. 80x30 is comfortable.' 8
     }
 }
 
@@ -3536,10 +3681,14 @@ function Read-Name {
     while ($true) {
         Sync-Console
         Paint-Title
-        Write-Mid 16 'Commander name:' 11
-        Write-Mid 17 $name 15
+        $ny = $script:MenuBottom + 1
+        if ($ny -ge $script:H - 1) { $ny = $script:H - 2 }
+        if ($ny -lt 0) { $ny = 0 }
+        Write-Mid $ny 'Commander name:' 11
+        Write-Mid ($ny + 1) $name 15
         Present-Frame
-        $k = [Console]::ReadKey($true)
+        $k = Read-MenuKey
+        if ($null -eq $k) { continue }
         if ($k.Key -eq 'Enter') { break }
         if ($k.Key -eq 'Escape') { return '' }
         if ($k.Key -eq 'Backspace') {
@@ -3582,15 +3731,19 @@ function Show-Help([string]$back) {
     while ($true) {
         Sync-Console
         Clear-Frame
-        Write-Mid 1 'HOW TO FLY' 14
-        $y = 3
+        $rows = 2 + $lines.Count
+        $y0 = 0
+        if ($rows -lt $script:H) { $y0 = [int](($script:H - $rows) / 2) }
+        Write-Mid $y0 'HOW TO FLY' 14
+        $y = $y0 + 2
         foreach ($line in $lines) {
-            if ($y -ge $script:H - 1) { break }
-            Write-At 2 $y $line 7 ($script:W - 4)
+            if ($y -ge $script:H) { break }
+            if ($line.Length -gt 0) { Write-Mid $y $line 7 }
             $y++
         }
         Present-Frame
-        [void][Console]::ReadKey($true)
+        $k = Read-MenuKey
+        if ($null -eq $k) { continue }
         return $back
     }
 }
@@ -3600,7 +3753,8 @@ function Show-Title {
         Sync-Console
         Paint-Title
         Present-Frame
-        $k = [Console]::ReadKey($true)
+        $k = Read-MenuKey
+        if ($null -eq $k) { continue }
         $ch = [string]$k.KeyChar
         if ($ch -eq 'n' -or $ch -eq 'N') {
             $name = Read-Name
@@ -3636,18 +3790,21 @@ function Legal-Word {
 function Paint-Docked([int]$sel) {
     Clear-Frame
     $sys = $script:Systems[$script:Sys]
-    Write-At 1 0 'ELITE' 14 8
-    Write-At ($script:W - 18) 0 "CR $($script:Cash)" 11 16
-    Write-At 1 2 "Commander $($script:Name)    $(Get-RankName $script:Kills)    Kills $($script:Kills)" 15 ($script:W - 2)
-    Write-At 1 3 "Cobra Mk III   Hull $(F0 $script:Hull)/100   Fuel $(F1 $script:Fuel) LY   Cargo $($script:CargoUsed)/$($script:CargoMax)t   Missiles $($script:Missiles)" 6 ($script:W - 2)
-    Write-At 1 4 "$($sys.Name)   $($script:EcoName[$sys.Eco]) / $($script:GovName[$sys.Gov])   TL $($sys.Tech)   Galaxy $($script:GalNum)" 7 ($script:W - 2)
-    Write-At 1 5 "Legal: $(Legal-Word)    Destination: $(Target-Name)" 7 ($script:W - 2)
-    $hint = Get-BestRun
-    Write-At 1 6 $hint 10 ($script:W - 2)
+    $headL = 'ELITE'
+    $headR = "CR $($script:Cash)"
+    $info = @(
+        "Commander $($script:Name)    $(Get-RankName $script:Kills)    Kills $($script:Kills)",
+        "Cobra Mk III   Hull $(F0 $script:Hull)/100   Fuel $(F1 $script:Fuel) LY   Cargo $($script:CargoUsed)/$($script:CargoMax)t   Missiles $($script:Missiles)",
+        "$($sys.Name)   $($script:EcoName[$sys.Eco]) / $($script:GovName[$sys.Gov])   TL $($sys.Tech)   Galaxy $($script:GalNum)",
+        "Legal: $(Legal-Word)    Destination: $(Target-Name)",
+        (Get-BestRun)
+    )
     $items = @(
         'Launch', 'Market', 'Equipment', 'Local chart', 'Galactic chart',
         'System data', 'Refuel', 'Repair hull', 'How to fly', 'Save and retire'
     )
+    $labels = New-Object System.Collections.Generic.List[string]
+    $colors = New-Object 'System.Collections.Generic.List[byte]'
     for ($i = 0; $i -lt $items.Count; $i++) {
         $prefix = '   '
         $col = [byte]7
@@ -3662,9 +3819,39 @@ function Paint-Docked([int]$sel) {
             $cost = [int](2 * [Math]::Ceiling($script:HullMax - $script:Hull))
             $label = "$prefix$($i + 1). Repair hull ($cost CR)"
         }
-        Write-At 2 (8 + $i) $label $col ($script:W - 4)
+        [void]$labels.Add($label)
+        [void]$colors.Add($col)
     }
-    if ($script:MsgT -gt 0) { Write-At 1 ($script:H - 2) $script:Msg 11 ($script:W - 2) }
+    $msg = ''
+    if ($script:MsgT -gt 0) { $msg = [string]$script:Msg }
+    $cols = $headL.Length + 2 + $headR.Length
+    foreach ($t in $info) { if ($t.Length -gt $cols) { $cols = $t.Length } }
+    foreach ($t in $labels) { if ($t.Length -gt $cols) { $cols = $t.Length } }
+    if ($msg.Length -gt $cols) { $cols = $msg.Length }
+    $block = 2 + $info.Count + 1 + $labels.Count
+    if ($msg.Length -gt 0) { $block += 2 }
+    $origin = Get-PanelOrigin $cols $block
+    $x = $origin[0]
+    $y = $origin[1]
+    Write-PanelHead $x $y $cols $headL 14 $headR 11
+    $y += 2
+    $infoCol = [byte[]]@(15, 6, 7, 7, 10)
+    for ($i = 0; $i -lt $info.Count; $i++) {
+        if ($y -ge $script:H) { break }
+        Write-At $x $y $info[$i] $infoCol[$i] $cols
+        $y++
+    }
+    $y++
+    for ($i = 0; $i -lt $labels.Count; $i++) {
+        if ($y -ge $script:H) { break }
+        Write-At $x $y $labels[$i] $colors[$i] $cols
+        $y++
+    }
+    if ($msg.Length -gt 0) {
+        $y++
+        if ($y -ge $script:H) { $y = $script:H - 1 }
+        Write-At $x $y $msg 11 $cols
+    }
 }
 
 function Buy-Fuel {
@@ -3701,7 +3888,8 @@ function Show-Docked {
         Sync-Console
         Paint-Docked $sel
         Present-Frame
-        $k = [Console]::ReadKey($true)
+        $k = Read-MenuKey
+        if ($null -eq $k) { continue }
         if ($k.Key -eq 'UpArrow') { $sel--; if ($sel -lt 0) { $sel = $items - 1 } }
         elseif ($k.Key -eq 'DownArrow') { $sel++; if ($sel -ge $items) { $sel = 0 } }
         elseif ($k.Key -eq 'Escape') { $script:MsgT = 0 }
@@ -3735,24 +3923,57 @@ function Paint-Market([int]$sel) {
     Clear-Frame
     Refresh-Market
     $sys = $script:Systems[$script:Sys]
-    Write-At 1 0 "MARKET  $($sys.Name)" 14 40
-    Write-At ($script:W - 22) 0 "CR $($script:Cash)" 11 20
-    Write-At 1 1 "Cargo $($script:CargoUsed)/$($script:CargoMax)t    $(Get-BestRun)" 10 ($script:W - 2)
-    Write-At 1 3 '    Commodity        Price   Stock   Hold' 8 ($script:W - 2)
-    $y = 4
+    $headL = "MARKET  $($sys.Name)"
+    $headR = "CR $($script:Cash)"
+    $cargo = "Cargo $($script:CargoUsed)/$($script:CargoMax)t    $(Get-BestRun)"
+    $header = '    Commodity        Price   Stock   Hold'
+    $goods = New-Object System.Collections.Generic.List[string]
+    $colors = New-Object 'System.Collections.Generic.List[byte]'
     for ($i = 0; $i -lt $script:Market.Count; $i++) {
-        if ($y -ge $script:H - 3) { break }
         $row = $script:Market[$i]
         $mark = ' '
         $col = [byte]7
         if ($i -eq $sel) { $mark = '>'; $col = [byte]14 }
         if ($row.Illegal) { $col = [byte]9 }
         $line = "{0} {1,-16} {2,6} {3,7} {4,6}" -f $mark, $row.Name, $row.Price, $row.Stock, (Get-Hold $row.Name)
-        Write-At 1 $y $line $col ($script:W - 2)
-        $y++
+        [void]$goods.Add($line)
+        [void]$colors.Add($col)
     }
-    Write-At 1 ($script:H - 2) 'Up/Down move   Right buy 1   Left sell 1   B max   V all   Esc back' 8 ($script:W - 2)
-    if ($script:MsgT -gt 0) { Write-At 1 ($script:H - 3) $script:Msg 11 ($script:W - 2) }
+    $foot = 'Up/Down move   Right buy 1   Left sell 1   B max   V all   Esc back'
+    $msg = ''
+    if ($script:MsgT -gt 0) { $msg = [string]$script:Msg }
+    $cols = $headL.Length + 2 + $headR.Length
+    foreach ($t in @($cargo, $header, $foot, $msg)) { if ($t.Length -gt $cols) { $cols = $t.Length } }
+    foreach ($t in $goods) { if ($t.Length -gt $cols) { $cols = $t.Length } }
+    $footRel = 4 + $goods.Count + 1
+    $block = $footRel + 1
+    if ($msg.Length -gt 0) { $block += 1 }
+    $origin = Get-PanelOrigin $cols $block
+    $x = $origin[0]
+    $y = $origin[1]
+    Write-PanelHead $x $y $cols $headL 14 $headR 11
+    Write-At $x ($y + 1) $cargo 10 $cols
+    Write-At $x ($y + 3) $header 8 $cols
+    $footY = $y + $footRel
+    $msgY = -1
+    if ($msg.Length -gt 0) {
+        $msgY = $footY
+        $footY = $msgY + 1
+    }
+    if ($footY -ge $script:H) {
+        $footY = $script:H - 1
+        if ($msg.Length -gt 0) { $msgY = $footY - 1 }
+    }
+    $limit = $footY
+    if ($msgY -ge 0 -and $msgY -lt $limit) { $limit = $msgY }
+    $gy = $y + 4
+    for ($i = 0; $i -lt $goods.Count; $i++) {
+        if ($gy -ge $limit) { break }
+        Write-At $x $gy $goods[$i] $colors[$i] $cols
+        $gy++
+    }
+    if ($msgY -ge 0) { Write-At $x $msgY $msg 11 $cols }
+    Write-At $x $footY $foot 8 $cols
 }
 
 function Show-Market {
@@ -3762,7 +3983,8 @@ function Show-Market {
         Sync-Console
         Paint-Market $sel
         Present-Frame
-        $k = [Console]::ReadKey($true)
+        $k = Read-MenuKey
+        if ($null -eq $k) { continue }
         if ($k.Key -eq 'UpArrow') { $sel--; if ($sel -lt 0) { $sel = $script:Market.Count - 1 } }
         elseif ($k.Key -eq 'DownArrow') { $sel++; if ($sel -ge $script:Market.Count) { $sel = 0 } }
         elseif ($k.Key -eq 'RightArrow') { Trade-Good $sel 1 1 }
@@ -3801,10 +4023,12 @@ function Show-Equip {
         $rows = Equip-Rows
         if ($sel -ge $rows.Count) { $sel = 0 }
         Clear-Frame
-        Write-At 1 0 'EQUIPMENT' 14 20
-        Write-At ($script:W - 18) 0 "CR $($script:Cash)" 11 16
+        $headL = 'EQUIPMENT'
+        $headR = "CR $($script:Cash)"
         $techHere = $script:Systems[$script:Sys].Tech
-        Write-At 1 2 "Station tech $techHere. Lasers fit the mount on the first line. Enter cycles it." 8 ($script:W - 2)
+        $intro = "Station tech $techHere. Lasers fit the mount on the first line. Enter cycles it."
+        $labels = New-Object System.Collections.Generic.List[string]
+        $colors = New-Object 'System.Collections.Generic.List[byte]'
         for ($i = 0; $i -lt $rows.Count; $i++) {
             $r = $rows[$i]
             $mark = ' '
@@ -3813,12 +4037,47 @@ function Show-Equip {
             $state = [string]$r.Note
             if ([string]$r.Note -eq '' -and $r.Have) { $state = 'fitted' }
             $line = "{0} {1,-22} {2,6} CR   {3}" -f $mark, $r.Name, $r.Price, $state
-            Write-At 1 (4 + $i) $line $col ($script:W - 2)
+            [void]$labels.Add($line)
+            [void]$colors.Add($col)
         }
-        Write-At 1 ($script:H - 2) 'Enter buys    Esc back' 8 40
-        if ($script:MsgT -gt 0) { Write-At 1 ($script:H - 3) $script:Msg 11 ($script:W - 2) }
+        $foot = 'Enter buys    Esc back'
+        $msg = ''
+        if ($script:MsgT -gt 0) { $msg = [string]$script:Msg }
+        $cols = $headL.Length + 2 + $headR.Length
+        if ($intro.Length -gt $cols) { $cols = $intro.Length }
+        if ($foot.Length -gt $cols) { $cols = $foot.Length }
+        if ($msg.Length -gt $cols) { $cols = $msg.Length }
+        foreach ($t in $labels) { if ($t.Length -gt $cols) { $cols = $t.Length } }
+        $block = 5 + $labels.Count
+        if ($msg.Length -gt 0) { $block += 1 }
+        $origin = Get-PanelOrigin $cols $block
+        $x = $origin[0]
+        $y = $origin[1]
+        Write-PanelHead $x $y $cols $headL 14 $headR 11
+        Write-At $x ($y + 2) $intro 8 $cols
+        $footY = $y + 4 + $labels.Count + 1
+        $msgY = -1
+        if ($msg.Length -gt 0) {
+            $msgY = $footY
+            $footY = $msgY + 1
+        }
+        if ($footY -ge $script:H) {
+            $footY = $script:H - 1
+            if ($msg.Length -gt 0) { $msgY = $footY - 1 }
+        }
+        $limit = $footY
+        if ($msgY -ge 0 -and $msgY -lt $limit) { $limit = $msgY }
+        $gy = $y + 4
+        for ($i = 0; $i -lt $labels.Count; $i++) {
+            if ($gy -ge $limit) { break }
+            Write-At $x $gy $labels[$i] $colors[$i] $cols
+            $gy++
+        }
+        if ($msgY -ge 0) { Write-At $x $msgY $msg 11 $cols }
+        Write-At $x $footY $foot 8 $cols
         Present-Frame
-        $k = [Console]::ReadKey($true)
+        $k = Read-MenuKey
+        if ($null -eq $k) { continue }
         if ($k.Key -eq 'UpArrow') { $sel--; if ($sel -lt 0) { $sel = $rows.Count - 1 } }
         elseif ($k.Key -eq 'DownArrow') { $sel++; if ($sel -ge $rows.Count) { $sel = 0 } }
         elseif ($k.Key -eq 'Escape') { $script:MsgT = 0; return }
@@ -3947,7 +4206,8 @@ function Show-Chart([bool]$galactic, [bool]$fromFlight) {
         Write-At 1 ($script:H - 2) $help 8 ($script:W - 2)
         if ($script:MsgT -gt 0) { Write-At 1 ($script:H - 3) $script:Msg 11 ($script:W - 2) }
         Present-Frame
-        $k = [Console]::ReadKey($true)
+        $k = Read-MenuKey
+        if ($null -eq $k) { continue }
         $step = 4
         if (-not $galactic) { $step = 2 }
         if ($k.Key -eq 'LeftArrow') { $cx -= $step }
@@ -3977,21 +4237,35 @@ function Show-Info {
     while ($true) {
         Sync-Console
         Clear-Frame
-        Write-Mid 1 $sys.Name.ToUpperInvariant() 14
         $blurb = "A $($script:EcoName[$sys.Eco].ToLowerInvariant()) world under $($script:GovName[$sys.Gov].ToLowerInvariant()) rule."
-        Write-At 2 4 $blurb 7 ($script:W - 4)
-        Write-At 2 5 "Tech level $($sys.Tech). Population $(F1 $sys.Pop) billion." 7 ($script:W - 4)
-        Write-At 2 6 "Known for $($sys.Feature)." 7 ($script:W - 4)
-        Write-At 2 8 "Coordinates $($sys.X), $($sys.Y).   Fuel $(F1 $script:Fuel) LY." 11 ($script:W - 4)
         $near = 0
         for ($i = 0; $i -lt 256; $i++) {
             if ($i -eq $script:Sys) { continue }
             if ((Get-Ly $script:Sys $i) -le 7.0) { $near++ }
         }
-        Write-At 2 9 "Systems inside 7 LY: $near" 7 40
-        Write-At 2 11 'Press any key.' 8 20
+        $page = @(
+            @{ T = $sys.Name.ToUpperInvariant(); C = [byte]14 },
+            @{ T = ''; C = [byte]7 },
+            @{ T = ''; C = [byte]7 },
+            @{ T = $blurb; C = [byte]7 },
+            @{ T = "Tech level $($sys.Tech). Population $(F1 $sys.Pop) billion."; C = [byte]7 },
+            @{ T = "Known for $($sys.Feature)."; C = [byte]7 },
+            @{ T = ''; C = [byte]7 },
+            @{ T = "Coordinates $($sys.X), $($sys.Y).   Fuel $(F1 $script:Fuel) LY."; C = [byte]11 },
+            @{ T = "Systems inside 7 LY: $near"; C = [byte]7 },
+            @{ T = ''; C = [byte]7 },
+            @{ T = 'Press any key.'; C = [byte]8 }
+        )
+        $y0 = [int](($script:H - $page.Count) / 2)
+        if ($y0 -lt 0) { $y0 = 0 }
+        for ($i = 0; $i -lt $page.Count; $i++) {
+            $yy = $y0 + $i
+            if ($yy -ge $script:H) { break }
+            if ($page[$i].T.Length -gt 0) { Write-Mid $yy $page[$i].T $page[$i].C }
+        }
         Present-Frame
-        [void][Console]::ReadKey($true)
+        $k = Read-MenuKey
+        if ($null -eq $k) { continue }
         return 'back'
     }
 }
@@ -4002,15 +4276,19 @@ function Show-Pause {
     while ($true) {
         Sync-Console
         Clear-Frame
-        Write-Mid 2 'PAUSED' 14
+        $rows = 2 + $items.Count
+        $y0 = [int](($script:H - $rows) / 2)
+        if ($y0 -lt 0) { $y0 = 0 }
+        Write-Mid $y0 'PAUSED' 14
         for ($i = 0; $i -lt $items.Count; $i++) {
             $col = [byte]7
             $mark = '  '
             if ($i -eq $sel) { $col = [byte]14; $mark = '> ' }
-            Write-Mid (5 + $i) "$mark$($items[$i])" $col
+            Write-Mid ($y0 + 2 + $i) "$mark$($items[$i])" $col
         }
         Present-Frame
-        $k = [Console]::ReadKey($true)
+        $k = Read-MenuKey
+        if ($null -eq $k) { continue }
         if ($k.Key -eq 'UpArrow') { $sel--; if ($sel -lt 0) { $sel = $items.Count - 1 } }
         elseif ($k.Key -eq 'DownArrow') { $sel++; if ($sel -ge $items.Count) { $sel = 0 } }
         elseif ($k.Key -eq 'Escape') { return 'continue' }
@@ -4104,14 +4382,17 @@ function Show-GameOver {
     while ($true) {
         Sync-Console
         Clear-Frame
-        Write-Mid 4 'SHIP DESTROYED' 9
-        Write-Mid 6 "Commander $($script:Name)" 15
-        Write-Mid 7 "Rank $(Get-RankName $script:Kills)    Kills $($script:Kills)" 7
-        Write-Mid 8 "Credits $($script:Cash)    Days $($script:Day)" 7
-        Write-Mid 11 'The last dock is still in the save file.' 8
-        Write-Mid 13 'L  load save     T  title     Q  quit' 14
+        $y0 = [int](($script:H - 10) / 2)
+        if ($y0 -lt 0) { $y0 = 0 }
+        Write-Mid $y0 'SHIP DESTROYED' 9
+        Write-Mid ($y0 + 2) "Commander $($script:Name)" 15
+        Write-Mid ($y0 + 3) "Rank $(Get-RankName $script:Kills)    Kills $($script:Kills)" 7
+        Write-Mid ($y0 + 4) "Credits $($script:Cash)    Days $($script:Day)" 7
+        Write-Mid ($y0 + 7) 'The last dock is still in the save file.' 8
+        Write-Mid ($y0 + 9) 'L  load save     T  title     Q  quit' 14
         Present-Frame
-        $k = [Console]::ReadKey($true)
+        $k = Read-MenuKey
+        if ($null -eq $k) { continue }
         $ch = [string]$k.KeyChar
         if ($ch -eq 'l' -or $ch -eq 'L') {
             if (Load-Commander) { return 'docked' }
@@ -4128,6 +4409,25 @@ function Invoke-SelfTest {
             Write-Output "FAIL $msg"
             $script:TestFail = $true
         }
+    }
+    function Find-Label([string]$needle) {
+        $fw = $script:W
+        for ($fy = 0; $fy -lt $script:H; $fy++) {
+            $chars = New-Object 'char[]' $fw
+            [Array]::Copy($script:Buf, ($fy * $fw), $chars, 0, $fw)
+            $row = [string]::new($chars)
+            $fx = $row.IndexOf($needle)
+            if ($fx -ge 0) {
+                $spot = New-Object 'int[]' 2
+                $spot[0] = $fx
+                $spot[1] = $fy
+                return ,$spot
+            }
+        }
+        $miss = New-Object 'int[]' 2
+        $miss[0] = -1
+        $miss[1] = -1
+        return ,$miss
     }
     $script:TestFail = $false
     $script:NoSpawn = $true
@@ -4366,9 +4666,72 @@ function Invoke-SelfTest {
             Check (-not $script:FaceVis[$f]) "$($hull.L) face $f hides just inside its polygon"
         }
     }
+    Set-Identity $eye
+    Set-Identity $script:Cam
+    $script:Px = 8.6
+    $script:Py = 0.0
+    $script:Pz = 0.0
+    Draw-Mesh $script:MeshMissile 0 0 0 $eye 1 '#' 7
+    Check ($script:FaceVis[4]) 'missile side shows on the body, not the fin tips'
+    $script:Px = 7.4
+    Draw-Mesh $script:MeshMissile 0 0 0 $eye 1 '#' 7
+    Check (-not $script:FaceVis[4]) 'missile side hides once the eye crosses the body'
+    $finPose = New-Object 'double[]' 9
+    $finPose[0] = 0; $finPose[1] = 0; $finPose[2] = -1
+    $finPose[3] = 0; $finPose[4] = 1; $finPose[5] = 0
+    $finPose[6] = 1; $finPose[7] = 0; $finPose[8] = 0
     $script:Px = 0.0
     $script:Py = 0.0
     $script:Pz = 0.0
+    Set-Identity $script:Cam
+    Clear-Frame
+    Draw-Mesh $script:MeshMissile 0 0 120 $finPose 1 '#' 11
+    Check ($script:FaceVis[4]) 'missile fin seen from the side'
+    Check (-not $script:FaceVis[7]) 'missile top stays hidden from the side'
+    Check (-not $script:FaceVis[8]) 'missile tail stays hidden from the side'
+    $mx = ($script:ViewTmp[5 * 3] + $script:ViewTmp[9 * 3]) / 2.0
+    $my = ($script:ViewTmp[5 * 3 + 1] + $script:ViewTmp[9 * 3 + 1]) / 2.0
+    $mz = ($script:ViewTmp[5 * 3 + 2] + $script:ViewTmp[9 * 3 + 2]) / 2.0
+    $sx = [int]($script:DX + ($mx / $mz) * $script:DotSX)
+    $sy = [int]($script:DY - ($my / $mz) * $script:DotSY)
+    $lit = $false
+    for ($oy = -2; $oy -le 2; $oy++) {
+        for ($ox = -2; $ox -le 2; $ox++) {
+            $px = $sx + $ox
+            $py = $sy + $oy
+            if ($px -lt 0 -or $py -lt 0 -or $px -ge $script:DW -or $py -ge $script:DH) { continue }
+            if ($script:Dots[$py * $script:DW + $px] -ne 0) { $lit = $true }
+        }
+    }
+    Check $lit 'missile draws the rear fin edge from the side'
+    Ensure-Fins $script:MeshMissile
+    Check ($script:MeshMissile.Fins.Count -eq 4) "missile fins $($script:MeshMissile.Fins.Count)"
+    $script:Px = 0.0
+    $script:Py = 0.0
+    $script:Pz = 0.0
+
+    Set-Frame 160 50
+    Paint-Title
+    $titleAt = Find-Label 'E L I T E'
+    Check ($titleAt[0] -gt 40) "title x $($titleAt[0])"
+    Check ($titleAt[1] -gt 8) "title y $($titleAt[1])"
+    Paint-Docked 0
+    $dockAt = Find-Label 'ELITE'
+    Check ($dockAt[0] -gt 20) "docked menu x $($dockAt[0])"
+    Check ($dockAt[1] -gt 4) "docked menu y $($dockAt[1])"
+    Paint-Market 0
+    $marketAt = Find-Label 'MARKET'
+    $keysAt = Find-Label 'Up/Down'
+    Check ($marketAt[0] -gt 20) "market x $($marketAt[0])"
+    Check ($marketAt[1] -gt 4) "market y $($marketAt[1])"
+    Check ($keysAt[0] -eq $marketAt[0]) 'market block shares one margin'
+    Set-Frame 40 16
+    Paint-Market 0
+    $smallAt = Find-Label 'MARKET'
+    $smallKeys = Find-Label 'Up/Down'
+    Check ($smallAt[1] -ge 0 -and $smallAt[1] -lt 16) 'market title on a small window'
+    Check ($smallKeys[1] -ge 0 -and $smallKeys[1] -lt 16) 'market keys on a small window'
+    Set-Frame 96 34
 
     $script:Cash = 100
     $script:Hull = 40

@@ -138,9 +138,10 @@ $script:Goods = @(
 
 # Wireframes follow the classic Elite blueprints: +X right, +Y up, +Z nose.
 # The Coriolis is scaled by 3.5 so the docking face sits 560 m out. It rolls about that face.
-# N is the face plane: direction and distance from the centre. A names the two faces of each edge.
-# An edge is drawn when the eye is near enough and on the outside of one of those faces.
-# NS is the blueprint scale: up close the plane offset is |N|^2 / 2^NS, as in LL9.
+# N points out of the face. A names the two faces of each edge.
+# An edge is drawn when the eye is near enough and on the outside of one of those polygons.
+# The polygon itself is the plane: the blueprint normal only chooses the outside.
+# NS is the original normal scale. It is not used for culling.
 # US is the coordinate scale. The Coriolis vertices are 3.5 times the blueprint, so its
 # distance is divided back before the original 256-unit shift.
 # FV and EV are the original distances, on the 0-31 scale, past which a face is kept and an edge is dropped.
@@ -2526,6 +2527,114 @@ function Project-Body([double]$wx, [double]$wy, [double]$wz) {
     $script:BodyY = $script:DY - ($script:LocY / $script:LocZ) * $script:DotSY
 }
 
+function Ensure-Planes($mesh) {
+    if ($mesh.ContainsKey('PD')) { return }
+    $norms = $mesh.N
+    $verts = $mesh.V
+    $edges = $mesh.E
+    $faces = $mesh.A
+    $nf = [int]($norms.Length / 3)
+    $pn = New-Object 'double[]' ($nf * 3)
+    $pd = New-Object 'double[]' $nf
+    $bags = @()
+    for ($f = 0; $f -lt $nf; $f++) {
+        $bags += ,(New-Object 'System.Collections.Generic.List[int]')
+    }
+    for ($e = 0; $e -lt $faces.Length; $e += 2) {
+        $v0 = [int]$edges[$e]
+        $v1 = [int]$edges[$e + 1]
+        foreach ($f in @([int]$faces[$e], [int]$faces[$e + 1])) {
+            if ($f -lt 0 -or $f -ge $nf) { continue }
+            $bag = $bags[$f]
+            if (-not $bag.Contains($v0)) { [void]$bag.Add($v0) }
+            if (-not $bag.Contains($v1)) { [void]$bag.Add($v1) }
+        }
+    }
+    for ($f = 0; $f -lt $nf; $f++) {
+        $nx = [double]$norms[$f * 3]
+        $ny = [double]$norms[$f * 3 + 1]
+        $nz = [double]$norms[$f * 3 + 2]
+        $bag = $bags[$f]
+        $usePoly = $false
+        $gx = 0.0
+        $gy = 0.0
+        $gz = 0.0
+        if ($bag.Count -ge 3) {
+            $link = @{}
+            for ($e = 0; $e -lt $faces.Length; $e += 2) {
+                if ([int]$faces[$e] -ne $f -and [int]$faces[$e + 1] -ne $f) { continue }
+                $v0 = [int]$edges[$e]
+                $v1 = [int]$edges[$e + 1]
+                if (-not $link.ContainsKey($v0)) { $link[$v0] = New-Object 'System.Collections.Generic.List[int]' }
+                if (-not $link.ContainsKey($v1)) { $link[$v1] = New-Object 'System.Collections.Generic.List[int]' }
+                [void]$link[$v0].Add($v1)
+                [void]$link[$v1].Add($v0)
+            }
+            $start = [int]$bag[0]
+            $loop = New-Object 'System.Collections.Generic.List[int]'
+            [void]$loop.Add($start)
+            $prev = -1
+            $cur = $start
+            for ($guard = 0; $guard -lt 16; $guard++) {
+                $next = -1
+                if ($link.ContainsKey($cur)) {
+                    foreach ($nb in $link[$cur]) {
+                        if ([int]$nb -ne $prev) { $next = [int]$nb; break }
+                    }
+                }
+                if ($next -lt 0 -or $next -eq $start) { break }
+                [void]$loop.Add($next)
+                $prev = $cur
+                $cur = $next
+            }
+            if ($loop.Count -eq $bag.Count) {
+                for ($i = 0; $i -lt $loop.Count; $i++) {
+                    $a = [int]$loop[$i]
+                    $b = [int]$loop[($i + 1) % $loop.Count]
+                    $ax = [double]$verts[$a * 3]
+                    $ay = [double]$verts[$a * 3 + 1]
+                    $az = [double]$verts[$a * 3 + 2]
+                    $bx = [double]$verts[$b * 3]
+                    $by = [double]$verts[$b * 3 + 1]
+                    $bz = [double]$verts[$b * 3 + 2]
+                    $gx += ($ay - $by) * ($az + $bz)
+                    $gy += ($az - $bz) * ($ax + $bx)
+                    $gz += ($ax - $bx) * ($ay + $by)
+                }
+                $gn = $gx * $gx + $gy * $gy + $gz * $gz
+                if ($gn -gt 0.001) { $usePoly = $true }
+            }
+        }
+        if ($usePoly) {
+            $sd = $gx * $nx + $gy * $ny + $gz * $nz
+            if ($sd -lt 0) {
+                $gx = -$gx
+                $gy = -$gy
+                $gz = -$gz
+            }
+            $nx = $gx
+            $ny = $gy
+            $nz = $gz
+        }
+        $sum = 0.0
+        $count = 0
+        foreach ($vi in $bag) {
+            $sum += [double]$verts[$vi * 3] * $nx
+            $sum += [double]$verts[$vi * 3 + 1] * $ny
+            $sum += [double]$verts[$vi * 3 + 2] * $nz
+            $count++
+        }
+        $plane = $nx * $nx + $ny * $ny + $nz * $nz
+        if ($count -gt 0) { $plane = $sum / $count }
+        $pn[$f * 3] = $nx
+        $pn[$f * 3 + 1] = $ny
+        $pn[$f * 3 + 2] = $nz
+        $pd[$f] = $plane
+    }
+    $mesh.PN = $pn
+    $mesh.PD = $pd
+}
+
 function Draw-Mesh($mesh, [double]$ox, [double]$oy, [double]$oz, [double[]]$rm, [double]$scale, [char]$ch, [byte]$color) {
     $verts = $mesh.V
     $edges = $mesh.E
@@ -2569,32 +2678,19 @@ function Draw-Mesh($mesh, [double]$ox, [double]$oy, [double]$oz, [double[]]$rm, 
         $far = [int]($aheadUnit / 256.0)
         if ($far -lt 0) { $far = 0 }
         if ($far -gt 31) { $far = 31 }
-        $ns = 0
-        if ($mesh.ContainsKey('NS')) { $ns = [int]$mesh.NS }
-        $shift = 0
-        $az = [Math]::Abs($aheadUnit)
-        while ($az -ge 256.0 -and $shift -lt 12) {
-            $az *= 0.5
-            $shift++
-        }
-        $useOffset = (($ns + $shift) -lt 4)
-        $off = 1.0
-        if ($useOffset -and $ns -gt 0) { $off = [Math]::Pow(2.0, $ns) }
+        Ensure-Planes $mesh
+        $pn = $mesh.PN
+        $pds = $mesh.PD
         $fv = $null
         if ($mesh.ContainsKey('FV')) { $fv = $mesh.FV }
         for ($i = 0; $i -lt $nf; $i++) {
             $faceFar = 31
             if ($null -ne $fv -and $i -lt $fv.Length) { $faceFar = [int]$fv[$i] }
             if ($far -gt $faceFar) { $vis[$i] = $true; continue }
-            $nx = $norms[$i * 3] * $scale
-            $ny = $norms[$i * 3 + 1] * $scale
-            $nz = $norms[$i * 3 + 2] * $scale
-            if ($useOffset) {
-                $dot = ($qx + $nx / $off) * $nx + ($qy + $ny / $off) * $ny + ($qz + $nz / $off) * $nz
-            }
-            else {
-                $dot = $qx * $nx + $qy * $ny + $qz * $nz
-            }
+            $nx = $pn[$i * 3] * $scale
+            $ny = $pn[$i * 3 + 1] * $scale
+            $nz = $pn[$i * 3 + 2] * $scale
+            $dot = $qx * $nx + $qy * $ny + $qz * $nz + ([double]$pds[$i] * $scale * $scale)
             $vis[$i] = ($dot -lt 0)
         }
     }
@@ -4204,6 +4300,75 @@ function Invoke-SelfTest {
     Check (-not $script:FaceVis[0]) 'station slot hidden once swung past'
     Draw-Mesh $script:MeshPort 0 0 2500 $slot 1 '#' 14
     Check (-not $script:FaceVis[0]) 'docking port hidden once swung past'
+
+    $hulls = @(
+        @{ L = 'side'; M = $script:MeshSide },
+        @{ L = 'viper'; M = $script:MeshViper },
+        @{ L = 'cobra'; M = $script:MeshCobra },
+        @{ L = 'adder'; M = $script:MeshAdder },
+        @{ L = 'krait'; M = $script:MeshKrait },
+        @{ L = 'asp'; M = $script:MeshAsp },
+        @{ L = 'fdl'; M = $script:MeshFdl },
+        @{ L = 'python'; M = $script:MeshPython },
+        @{ L = 'thargoid'; M = $script:MeshThargoid },
+        @{ L = 'thargon'; M = $script:MeshThargon },
+        @{ L = 'missile'; M = $script:MeshMissile },
+        @{ L = 'can'; M = $script:MeshCan },
+        @{ L = 'rock'; M = $script:MeshRock },
+        @{ L = 'station'; M = $script:MeshStation },
+        @{ L = 'port'; M = $script:MeshPort }
+    )
+    $eye = New-Object 'double[]' 9
+    Set-Identity $eye
+    Set-Identity $script:Cam
+    foreach ($hull in $hulls) {
+        $hm = $hull.M
+        Ensure-Planes $hm
+        $scale = 1.0
+        if ($hull.L -eq 'missile') { $scale = 0.5 }
+        $nf = [int]$hm.PD.Length
+        for ($f = 0; $f -lt $nf; $f++) {
+            $nx = [double]$hm.PN[$f * 3]
+            $ny = [double]$hm.PN[$f * 3 + 1]
+            $nz = [double]$hm.PN[$f * 3 + 2]
+            $nn2 = $nx * $nx + $ny * $ny + $nz * $nz
+            if ($nn2 -lt 0.001) { continue }
+            $nn = [Math]::Sqrt($nn2)
+            $ux = $nx / $nn
+            $uy = $ny / $nn
+            $uz = $nz / $nn
+            $minD = 1.0e99
+            $maxD = -1.0e99
+            $he = $hm.E
+            $ha = $hm.A
+            $hv = $hm.V
+            $seen = @{}
+            for ($e = 0; $e -lt $ha.Length; $e += 2) {
+                if ([int]$ha[$e] -ne $f -and [int]$ha[$e + 1] -ne $f) { continue }
+                foreach ($vi in @([int]$he[$e], [int]$he[$e + 1])) {
+                    if ($seen.ContainsKey($vi)) { continue }
+                    $seen[$vi] = $true
+                    $d = ([double]$hv[$vi * 3] * $ux + [double]$hv[$vi * 3 + 1] * $uy + [double]$hv[$vi * 3 + 2] * $uz) * $scale
+                    if ($d -lt $minD) { $minD = $d }
+                    if ($d -gt $maxD) { $maxD = $d }
+                }
+            }
+            if ($seen.Count -lt 1) { continue }
+            $script:Px = $ux * ($maxD + 1.2)
+            $script:Py = $uy * ($maxD + 1.2)
+            $script:Pz = $uz * ($maxD + 1.2)
+            Draw-Mesh $hm 0 0 0 $eye $scale '#' 7
+            Check ($script:FaceVis[$f]) "$($hull.L) face $f shows just outside its polygon"
+            $script:Px = $ux * ($minD - 1.2)
+            $script:Py = $uy * ($minD - 1.2)
+            $script:Pz = $uz * ($minD - 1.2)
+            Draw-Mesh $hm 0 0 0 $eye $scale '#' 7
+            Check (-not $script:FaceVis[$f]) "$($hull.L) face $f hides just inside its polygon"
+        }
+    }
+    $script:Px = 0.0
+    $script:Py = 0.0
+    $script:Pz = 0.0
 
     $script:Cash = 100
     $script:Hull = 40

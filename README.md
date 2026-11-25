@@ -1,8 +1,8 @@
 # Elite
 
-Неофициальный ремейк Elite 1984 года в консоли Windows. Кабина рисуется символами Брайля, рынок, карты и меню остаются обычным текстом. Это своя реализация на PowerShell, без ПЗУ Spectrum и без оригинального кода.
+Неофициальный ремейк Elite 1984 года в консоли Windows. Кабина рисуется сплошными блоками, рынок, карты и меню остаются обычным текстом. Это своя реализация на PowerShell, без ПЗУ Spectrum и без оригинального кода.
 
-Unofficial remake of the 1984 game Elite for the Windows console. The cockpit is drawn with Braille, while the market, charts and menus stay plain text. It is an original PowerShell game: no Spectrum ROM and no original source.
+Unofficial remake of the 1984 game Elite for the Windows console. The cockpit is drawn with solid blocks, while the market, charts and menus stay plain text. It is an original PowerShell game: no Spectrum ROM and no original source.
 
 ## Кадры / Frames
 
@@ -52,7 +52,7 @@ Cobra Mk III проходит перед станцией. / A Cobra Mk III cros
 
 ### Запуск
 
-Нужны Windows PowerShell 5.1 и моноширинный шрифт с Брайлем: Consolas или Cascadia Mono. Картинка следует за окном, удобный размер от 80×30. Лучше всего смотрится в Windows Terminal.
+Нужны Windows PowerShell 5.1 и моноширинный шрифт со сплошными блоками, например Cascadia Mono 2404.23. Картинка следует за окном, удобный размер от 80×30. Лучше всего смотрится в Windows Terminal.
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\Elite.ps1
@@ -105,7 +105,7 @@ Three missions turn up. A fuel leak fills the hold with refugees: leave by sun-s
 
 ### Run
 
-Windows PowerShell 5.1, and a monospace font that can draw Braille: Consolas or Cascadia Mono. The picture follows the window. 80×30 is a comfortable size, and Windows Terminal is the best place to see it.
+Windows PowerShell 5.1, and a monospace font with those solid blocks, such as Cascadia Mono 2404.23. The picture follows the window. 80×30 is a comfortable size, and Windows Terminal is the best place to see it.
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\Elite.ps1

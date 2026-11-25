@@ -2383,6 +2383,22 @@ function Sync-Console {
     }
 }
 
+function Drain-ConsoleKeys {
+    try {
+        while ([Console]::KeyAvailable) { [void][Console]::ReadKey($true) }
+    }
+    catch { }
+}
+
+function Wait-KeyUp([int]$vk) {
+    Drain-ConsoleKeys
+    if (-not $script:AsyncKeys) { return }
+    while (Test-Key $vk) {
+        Start-Sleep -Milliseconds 20
+        Drain-ConsoleKeys
+    }
+}
+
 function Read-MenuKey {
     while ($true) {
         $size = Get-ConsoleSize
@@ -3519,6 +3535,7 @@ function Read-FlightInput {
     if (Test-Edge 51) { $script:EdgeView = 2 }
     if (Test-Edge 52) { $script:EdgeView = 3 }
     $script:EdgePause = Test-Edge 27
+    if ($script:AsyncKeys) { Drain-ConsoleKeys }
 }
 
 function Get-RowText([int]$y) {
@@ -4361,6 +4378,8 @@ function Show-Info {
 function Show-Pause {
     $sel = 0
     $items = @('Continue', 'Local chart', 'Galactic chart', 'Jump', 'How to fly', 'Save', 'Presentation', 'Exit to title')
+    Drain-ConsoleKeys
+    foreach ($vk in @(38, 40, 27, 13, 32)) { Wait-KeyUp $vk }
     while ($true) {
         Sync-Console
         Clear-Frame
@@ -4377,8 +4396,14 @@ function Show-Pause {
         Present-Frame
         $k = Read-MenuKey
         if ($null -eq $k) { continue }
-        if ($k.Key -eq 'UpArrow') { $sel--; if ($sel -lt 0) { $sel = $items.Count - 1 } }
-        elseif ($k.Key -eq 'DownArrow') { $sel++; if ($sel -ge $items.Count) { $sel = 0 } }
+        if ($k.Key -eq 'UpArrow') {
+            $sel--; if ($sel -lt 0) { $sel = $items.Count - 1 }
+            Wait-KeyUp 38
+        }
+        elseif ($k.Key -eq 'DownArrow') {
+            $sel++; if ($sel -ge $items.Count) { $sel = 0 }
+            Wait-KeyUp 40
+        }
         elseif ($k.Key -eq 'Escape') { return 'continue' }
         elseif ($k.Key -eq 'Enter' -or $k.Key -eq 'Spacebar') {
             switch ($sel) {

@@ -41,6 +41,8 @@ $script:ShieldF = 100.0
 $script:ShieldA = 100.0
 $script:DialPitch = 0.0
 $script:DialRoll = 0.0
+$script:StickX = 128
+$script:StickY = 128
 $script:EcmT = 0.0
 $script:ScanRange = 10240.0
 $script:ScanDots = $null
@@ -142,7 +144,7 @@ $script:Goods = @(
 # An edge is drawn when the eye is near enough and on the outside of one of those polygons.
 # The polygon itself is the plane: the blueprint normal only chooses the outside.
 # A face that also carries fin tips keeps the plane of the panel most vertices share.
-# A fin tip sticks out of that panel. Its edges stay up together while any of its faces does.
+# An edge whose two faces both point away is left out, the whole edge, the way the original does.
 # NS is the original normal scale. It is not used for culling.
 # US is the coordinate scale. The Coriolis vertices are 3.5 times the blueprint, so its
 # distance is divided back before the original 256-unit shift.
@@ -1095,6 +1097,51 @@ function Yaw-Mesh([double[]]$m, [double]$yaw) {
     }
 }
 
+function Shift-Stick([int]$x, [int]$step) {
+    $v = $x + $step
+    if ($v -lt 1) { $v = 1 }
+    if ($v -gt 255) { $v = 255 }
+    return $v
+}
+
+function Damp-Stick([int]$x) {
+    if ($x -lt 128) { return ($x + 1) }
+    if ($x -gt 128) { return ($x - 1) }
+    return 128
+}
+
+function Update-FlightStick {
+    $rx = [int]$script:StickX
+    $ry = [int]$script:StickY
+    if ($script:InRoll -gt 0) { $rx = Shift-Stick $rx 7 }
+    elseif ($script:InRoll -lt 0) { $rx = Shift-Stick $rx -7 }
+    if ($script:InPitch -gt 0) { $ry = Shift-Stick $ry 14 }
+    elseif ($script:InPitch -lt 0) { $ry = Shift-Stick $ry -14 }
+    $rx = Damp-Stick (Damp-Stick $rx)
+    $ry = Damp-Stick $ry
+    $script:StickX = $rx
+    $script:StickY = $ry
+}
+
+function Get-StickAngle([int]$stick, [string]$which) {
+    $signed = $stick - 128
+    if ($signed -gt 127) { $signed = 127 }
+    if ($signed -lt -128) { $signed = -128 }
+    $mag = [Math]::Abs($signed)
+    $a = 0
+    if ($which -eq 'roll') {
+        $a = [Math]::Floor($mag / 4.0)
+        if ($a -lt 8) { $a = [Math]::Floor($a / 2.0) }
+    }
+    else {
+        $a = [Math]::Floor(($mag + 4.0) / 16.0)
+        if ($a -lt 3) { $a = [Math]::Floor($a / 2.0) }
+    }
+    $sign = 1.0
+    if ($signed -lt 0) { $sign = -1.0 }
+    return ($sign * [double]$a / 256.0)
+}
+
 function Turn-Ship([double[]]$m, [double]$pitch, [double]$roll) {
     if ([Math]::Abs($pitch) -gt 0.000001) {
         $c = [Math]::Cos($pitch); $s = [Math]::Sin($pitch)
@@ -1330,6 +1377,8 @@ function Enter-Space([string]$mode) {
         $script:Py = 0.0
         $script:Pz = $ez * 860.0
         Set-Facing $script:M $ex 0.0 $ez
+        $script:StickX = 128
+        $script:StickY = 128
         $script:Vx = $ex * 35.0
         $script:Vy = 0.0
         $script:Vz = $ez * 35.0
@@ -1340,6 +1389,8 @@ function Enter-Space([string]$mode) {
         $script:Py = 500.0
         $script:Pz = 3600.0
         $script:Vx = 0.0; $script:Vy = 0.0; $script:Vz = 0.0
+        $script:StickX = 128
+        $script:StickY = 128
         Set-Facing $script:M (-$script:Px) (-$script:Py) (-$script:Pz)
         Say "Arrived at $($sys.Name). Dock when you are ready."
     }
@@ -1354,6 +1405,8 @@ function Enter-Witch {
     $script:DidDock = $false
     $script:Px = 0; $script:Py = 0; $script:Pz = 0
     $script:Vx = 0; $script:Vy = 0; $script:Vz = 0
+    $script:StickX = 128
+    $script:StickY = 128
     if ($null -eq $script:M) { $script:M = New-Object 'double[]' 9 }
     Set-Identity $script:M
     $script:Ships = New-Object System.Collections.Generic.List[object]
@@ -2120,8 +2173,7 @@ function Update-Flight([double]$dt) {
         $script:Shield = $script:ShieldF
     }
 
-    $pitch = $script:InPitch * 1.7
-    $roll = $script:InRoll * 2.2
+    $speed = $script:Vx * $script:M[6] + $script:Vy * $script:M[7] + $script:Vz * $script:M[8]
     $manualTurn = ([Math]::Abs($script:InPitch) -gt 0.01) -or ([Math]::Abs($script:InRoll) -gt 0.01)
     $manualThrust = [Math]::Abs($script:InThrust) -gt 0.01 -or $script:InBrake
 
@@ -2138,7 +2190,7 @@ function Update-Flight([double]$dt) {
             $roll += $script:M[1] * 1.8
             if ($script:M[4] -lt 0.45) { $roll += 1.5 }
         }
-        $sp = Speed-Of $script:Vx $script:Vy $script:Vz
+        $sp = [Math]::Abs($speed)
         $desired = 90.0
         if ($dist -lt 2200) { $desired = 48 }
         if ($dist -lt 1200) { $desired = 28 }
@@ -2149,26 +2201,37 @@ function Update-Flight([double]$dt) {
         elseif ($sp -lt $desired - 4) { $script:InThrust = 1; $script:InBrake = $false }
         elseif ($sp -gt $desired + 8) { $script:InBrake = $true; $script:InThrust = 0 }
         else { $script:InThrust = 0; $script:InBrake = $false }
+        $script:DialPitch = $pitch
+        $script:DialRoll = $roll
+        Turn-Ship $script:M ($pitch * $dt) ($roll * $dt)
     }
-
-    $script:DialPitch = $pitch
-    $script:DialRoll = $roll
-    Turn-Ship $script:M ($pitch * $dt) ($roll * $dt)
+    else {
+        Update-FlightStick
+        $pitch = Get-StickAngle ([int]$script:StickY) 'pitch'
+        $roll = Get-StickAngle ([int]$script:StickX) 'roll'
+        $script:DialPitch = (($script:StickY - 128) / 127.0) * 2.2
+        $script:DialRoll = (($script:StickX - 128) / 127.0) * 2.2
+        Turn-Ship $script:M $pitch $roll
+    }
     Repair-Axes $script:M
     if ($script:InThrust -gt 0) {
-        $script:Vx += $script:M[6] * 230 * $dt
-        $script:Vy += $script:M[7] * 230 * $dt
-        $script:Vz += $script:M[8] * 230 * $dt
+        $speed += 230 * $dt
         if ($manualThrust) { $script:AutoDock = $false }
     }
     elseif ($script:InThrust -lt 0) {
-        $script:Vx -= $script:M[6] * 150 * $dt
-        $script:Vy -= $script:M[7] * 150 * $dt
-        $script:Vz -= $script:M[8] * 150 * $dt
+        $speed -= 150 * $dt
         if ($manualThrust) { $script:AutoDock = $false }
     }
     if ($script:InBrake) {
-        Brake-Velocity 170 $dt
+        $drop = 170 * $dt
+        if ($speed -gt 0) {
+            $speed -= $drop
+            if ($speed -lt 0) { $speed = 0 }
+        }
+        elseif ($speed -lt 0) {
+            $speed += $drop
+            if ($speed -gt 0) { $speed = 0 }
+        }
         if ($manualThrust) { $script:AutoDock = $false }
     }
     $torusGo = $false
@@ -2177,14 +2240,18 @@ function Update-Flight([double]$dt) {
             if ($script:Msg -ne 'Mass-locked.') { Say 'Mass-locked.' }
         }
         else {
-            $script:Vx = $script:M[6] * 2100
-            $script:Vy = $script:M[7] * 2100
-            $script:Vz = $script:M[8] * 2100
+            $speed = 2100
             $script:AutoDock = $false
             $torusGo = $true
         }
     }
-    if ($torusGo) { Clamp-Speed 2200 } else { Clamp-Speed 640 }
+    $maxSp = 640.0
+    if ($torusGo) { $maxSp = 2200.0 }
+    if ($speed -gt $maxSp) { $speed = $maxSp }
+    if ($speed -lt -$maxSp) { $speed = -$maxSp }
+    $script:Vx = $script:M[6] * $speed
+    $script:Vy = $script:M[7] * $speed
+    $script:Vz = $script:M[8] * $speed
     $script:Px += $script:Vx * $dt
     $script:Py += $script:Vy * $dt
     $script:Pz += $script:Vz * $dt
@@ -2279,11 +2346,11 @@ function Set-Frame([int]$w, [int]$h) {
     $script:DX = ($script:CX * 2) + 1
     $script:DY = (($script:CY - $script:ViewY) * 4) + 2
     $n = $w * $h
-    $script:Buf = New-Object 'char[]' $n
+    $script:Buf = New-Object 'int[]' $n
     $script:Col = New-Object 'byte[]' $n
-    $script:Blank = New-Object 'char[]' $n
-    for ($i = 0; $i -lt $n; $i++) { $script:Blank[$i] = ' ' }
-    if ($null -eq $script:Sb) { $script:Sb = New-Object System.Text.StringBuilder ($n + 512) }
+    $script:Blank = New-Object 'int[]' $n
+    for ($i = 0; $i -lt $n; $i++) { $script:Blank[$i] = 32 }
+    if ($null -eq $script:Sb) { $script:Sb = New-Object System.Text.StringBuilder ($n * 2 + 512) }
 }
 
 function Get-ConsoleSize {
@@ -2343,7 +2410,7 @@ function Write-At([int]$x, [int]$y, [string]$text, [byte]$color, [int]$maxW) {
         $xx = $x + $i
         if ($xx -ge 0 -and $xx -lt $w) {
             $idx = $y * $w + $xx
-            $script:Buf[$idx] = $text[$i]
+            $script:Buf[$idx] = [int]$text[$i]
             $script:Col[$idx] = $color
         }
     }
@@ -2381,8 +2448,69 @@ function Enable-Braille {
     if (-not ('EliteBraille.Raster' -as [type])) {
         Add-Type -TypeDefinition @'
 using System;
+using System.Collections.Generic;
+using System.Text;
 namespace EliteBraille {
   public static class Raster {
+    static int[] OctantMap;
+    static HashSet<int> Fill;
+    static Raster() {
+      var reused = new Dictionary<int, int>();
+      reused[0] = 0x0020;
+      reused[1] = 0x1CEA8;
+      reused[2] = 0x1CEAB;
+      reused[3] = 0x1FB82;
+      reused[5] = 0x2598;
+      reused[10] = 0x259D;
+      reused[15] = 0x2580;
+      reused[20] = 0x1FBE6;
+      reused[40] = 0x1FBE7;
+      reused[63] = 0x1FB85;
+      reused[64] = 0x1CEA3;
+      reused[80] = 0x2596;
+      reused[85] = 0x258C;
+      reused[90] = 0x259E;
+      reused[95] = 0x259B;
+      reused[128] = 0x1CEA0;
+      reused[160] = 0x2597;
+      reused[165] = 0x259A;
+      reused[170] = 0x2590;
+      reused[175] = 0x259C;
+      reused[192] = 0x2582;
+      reused[240] = 0x2584;
+      reused[245] = 0x2599;
+      reused[250] = 0x259F;
+      reused[252] = 0x2586;
+      reused[255] = 0x2588;
+      OctantMap = new int[256];
+      Fill = new HashSet<int>();
+      int main = 0;
+      for (int mask = 0; mask < 256; mask++) {
+        int cp;
+        if (!reused.TryGetValue(mask, out cp)) cp = 0x1CD00 + main++;
+        OctantMap[mask] = cp;
+        if (mask != 0) Fill.Add(cp);
+      }
+    }
+    static int Octant(int braille) {
+      int m = 0;
+      if ((braille & 0x01) != 0) m |= 0x01;
+      if ((braille & 0x08) != 0) m |= 0x02;
+      if ((braille & 0x02) != 0) m |= 0x04;
+      if ((braille & 0x10) != 0) m |= 0x08;
+      if ((braille & 0x04) != 0) m |= 0x10;
+      if ((braille & 0x20) != 0) m |= 0x20;
+      if ((braille & 0x40) != 0) m |= 0x40;
+      if ((braille & 0x80) != 0) m |= 0x80;
+      return OctantMap[m];
+    }
+    public static bool IsFill(int cp) { return Fill.Contains(cp); }
+    public static void Append(StringBuilder sb, int cp) {
+      if (cp < 0x10000) { sb.Append((char)cp); return; }
+      int u = cp - 0x10000;
+      sb.Append((char)(0xD800 + (u >> 10)));
+      sb.Append((char)(0xDC00 + (u & 0x3FF)));
+    }
     public static void Plot(byte[] dots, int dw, int dh, int x, int y, byte color) {
       if ((uint)x < (uint)dw && (uint)y < (uint)dh) dots[y * dw + x] = color;
     }
@@ -2442,7 +2570,7 @@ namespace EliteBraille {
       }
       return false;
     }
-    public static void Stamp(byte[] dots, int dw, char[] buf, byte[] col, int stride, int viewY, int viewH, byte[] pri) {
+    public static void Stamp(byte[] dots, int dw, int[] buf, byte[] col, int stride, int viewY, int viewH, byte[] pri) {
       for (int cy = 0; cy < viewH; cy++) {
         int rowBase = cy * 4 * dw;
         int bufRow = (cy + viewY) * stride;
@@ -2472,7 +2600,7 @@ namespace EliteBraille {
           c = dots[i4 + 1];
           if (c != 0) { mask |= 0x80; if (pri[c] >= bestP) { bestP = pri[c]; best = c; } }
           if (mask != 0) {
-            buf[bufRow + cx] = (char)(0x2800 + mask);
+            buf[bufRow + cx] = Octant(mask);
             col[bufRow + cx] = best;
           }
         }
@@ -2706,61 +2834,6 @@ function Ensure-Planes($mesh) {
     $mesh.PD = $pd
 }
 
-function Ensure-Fins($mesh) {
-    if ($mesh.ContainsKey('Fins')) { return }
-    Ensure-Planes $mesh
-    $verts = $mesh.V
-    $edges = $mesh.E
-    $adj = $mesh.A
-    $pn = $mesh.PN
-    $pd = $mesh.PD
-    $nv = [int]($verts.Length / 3)
-    $ne = [int]($edges.Length / 2)
-    $touch = @()
-    for ($i = 0; $i -lt $nv; $i++) {
-        $touch += ,(New-Object 'System.Collections.Generic.List[int]')
-    }
-    for ($ei = 0; $ei -lt $ne; $ei++) {
-        [void]$touch[[int]$edges[$ei * 2]].Add($ei)
-        [void]$touch[[int]$edges[$ei * 2 + 1]].Add($ei)
-    }
-    $fins = New-Object System.Collections.Generic.List[object]
-    for ($v = 0; $v -lt $nv; $v++) {
-        if ($touch[$v].Count -ne 2) { continue }
-        $maxOut = 0.0
-        $inside = $false
-        $seen = @{}
-        foreach ($ei in $touch[$v]) {
-            foreach ($f in @([int]$adj[$ei * 2], [int]$adj[$ei * 2 + 1])) {
-                if ($seen.ContainsKey($f)) { continue }
-                $seen[$f] = $true
-                $nx = [double]$pn[$f * 3]
-                $ny = [double]$pn[$f * 3 + 1]
-                $nz = [double]$pn[$f * 3 + 2]
-                $nn = [Math]::Sqrt($nx * $nx + $ny * $ny + $nz * $nz)
-                if ($nn -lt 0.001) { continue }
-                $dot = [double]$verts[$v * 3] * $nx
-                $dot += [double]$verts[$v * 3 + 1] * $ny
-                $dot += [double]$verts[$v * 3 + 2] * $nz
-                $side = ($dot - [double]$pd[$f]) / $nn
-                if ($side -gt $maxOut) { $maxOut = $side }
-                if ($side -lt -0.4) { $inside = $true }
-            }
-        }
-        if ($inside -or $maxOut -lt 1.5) { continue }
-        $faceList = New-Object 'System.Collections.Generic.List[int]'
-        $edgeList = New-Object 'System.Collections.Generic.List[int]'
-        foreach ($ei in $touch[$v]) {
-            [void]$edgeList.Add([int]$ei)
-            foreach ($f in @([int]$adj[$ei * 2], [int]$adj[$ei * 2 + 1])) {
-                if (-not $faceList.Contains([int]$f)) { [void]$faceList.Add([int]$f) }
-            }
-        }
-        [void]$fins.Add(@{ E = $edgeList.ToArray(); F = $faceList.ToArray() })
-    }
-    $mesh.Fins = $fins
-}
-
 function Draw-Mesh($mesh, [double]$ox, [double]$oy, [double]$oz, [double[]]$rm, [double]$scale, [char]$ch, [byte]$color) {
     $verts = $mesh.V
     $edges = $mesh.E
@@ -2822,22 +2895,9 @@ function Draw-Mesh($mesh, [double]$ox, [double]$oy, [double]$oz, [double[]]$rm, 
     }
     $adj = $null
     $ev = $null
-    $finOn = $null
     if ($null -ne $vis) {
         $adj = $mesh.A
         if ($mesh.ContainsKey('EV')) { $ev = $mesh.EV }
-        Ensure-Fins $mesh
-        if ($mesh.Fins.Count -gt 0) {
-            $finOn = New-Object 'bool[]' ([int]($edges.Length / 2))
-            foreach ($fin in $mesh.Fins) {
-                $hot = $false
-                foreach ($f in $fin.F) {
-                    if ($f -ge 0 -and $f -lt $vis.Length -and $vis[$f]) { $hot = $true; break }
-                }
-                if (-not $hot) { continue }
-                foreach ($ei in $fin.E) { $finOn[$ei] = $true }
-            }
-        }
     }
     for ($e = 0; $e -lt $edges.Length; $e += 2) {
         if ($null -ne $vis) {
@@ -2847,7 +2907,6 @@ function Draw-Mesh($mesh, [double]$ox, [double]$oy, [double]$oz, [double[]]$rm, 
             $show = $false
             if ($f1 -ge 0 -and $f1 -lt $vis.Length -and $vis[$f1]) { $show = $true }
             elseif ($f2 -ge 0 -and $f2 -lt $vis.Length -and $f2 -ne $f1 -and $vis[$f2]) { $show = $true }
-            if (-not $show -and $null -ne $finOn -and $finOn[$ei]) { $show = $true }
             if (-not $show) { continue }
         }
         $a = $edges[$e]; $b = $edges[$e + 1]
@@ -3003,10 +3062,10 @@ function Draw-Scanner([int]$ox, [int]$oy, [int]$cw, [int]$ch) {
     }
     $n = $cw * $ch
     if ($null -eq $script:ScanBuf -or $script:ScanBuf.Length -ne $n) {
-        $script:ScanBuf = New-Object 'char[]' $n
+        $script:ScanBuf = New-Object 'int[]' $n
         $script:ScanCol = New-Object 'byte[]' $n
     }
-    for ($i = 0; $i -lt $n; $i++) { $script:ScanBuf[$i] = ' ' }
+    for ($i = 0; $i -lt $n; $i++) { $script:ScanBuf[$i] = 32 }
     [Array]::Clear($script:ScanCol, 0, $n)
     [EliteBraille.Raster]::Stamp($script:ScanDots, $dw, $script:ScanBuf, $script:ScanCol, $cw, 0, $ch, $script:Pri)
     for ($y = 0; $y -lt $ch; $y++) {
@@ -3014,7 +3073,7 @@ function Draw-Scanner([int]$ox, [int]$oy, [int]$cw, [int]$ch) {
         $dst = ($oy + $y) * $script:W + $ox
         for ($x = 0; $x -lt $cw; $x++) {
             $cell = $script:ScanBuf[$src + $x]
-            if ($cell -ne ' ') {
+            if ($cell -ne 32) {
                 $script:Buf[$dst + $x] = $cell
                 $script:Col[$dst + $x] = $script:ScanCol[$src + $x]
             }
@@ -3257,7 +3316,7 @@ function Present-Ansi {
                 [void]$sb.Append($script:Ansi[$c])
                 $last = $c
             }
-            [void]$sb.Append($script:Buf[$row + $x])
+            [EliteBraille.Raster]::Append($sb, $script:Buf[$row + $x])
         }
     }
     if ($script:QuietPresent) { return }
@@ -3274,11 +3333,12 @@ function Present-Legacy {
             $x2 = $x + 1
             while ($x2 -lt $script:W -and $script:Col[$row + $x2] -eq $c) { $x2++ }
             [Console]::ForegroundColor = $script:Pal[$c]
-            $len = $x2 - $x
-            $chars = New-Object 'char[]' $len
-            [Array]::Copy($script:Buf, $row + $x, $chars, 0, $len)
-            [Console]::Write($chars)
-            $x = $x2
+            $piece = New-Object System.Text.StringBuilder
+            while ($x -lt $x2) {
+                [EliteBraille.Raster]::Append($piece, $script:Buf[$row + $x])
+                $x++
+            }
+            [Console]::Write($piece.ToString())
         }
     }
 }
@@ -3301,6 +3361,25 @@ namespace EliteConsole {
     public static extern bool SetConsoleMode(IntPtr hConsoleHandle, uint dwMode);
     [DllImport("user32.dll")]
     public static extern short GetAsyncKeyState(int vKey);
+    [DllImport("gdi32.dll", CharSet = CharSet.Unicode)]
+    public static extern int AddFontResourceW(string file);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern IntPtr SendMessageW(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    public static extern bool GetCurrentConsoleFontEx(IntPtr handle, bool maximum, ref CONSOLE_FONT_INFOEX info);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    public static extern bool SetCurrentConsoleFontEx(IntPtr handle, bool maximum, ref CONSOLE_FONT_INFOEX info);
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    public struct CONSOLE_FONT_INFOEX {
+      public uint cbSize;
+      public uint nFont;
+      public short dwFontSizeX;
+      public short dwFontSizeY;
+      public int FontFamily;
+      public int FontWeight;
+      [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
+      public string FaceName;
+    }
   }
 }
 '@
@@ -3442,13 +3521,22 @@ function Read-FlightInput {
     $script:EdgePause = Test-Edge 27
 }
 
+function Get-RowText([int]$y) {
+    $fw = $script:W
+    $chars = New-Object 'char[]' $fw
+    $base = $y * $fw
+    for ($x = 0; $x -lt $fw; $x++) {
+        $cp = [int]$script:Buf[$base + $x]
+        if ($cp -ge 32 -and $cp -lt 0x10000) { $chars[$x] = [char]$cp }
+        else { $chars[$x] = '?' }
+    }
+    return [string]::new($chars)
+}
+
 function Dump-Frame([string]$path) {
     $sb = New-Object System.Text.StringBuilder
     for ($y = 0; $y -lt $script:H; $y++) {
-        $row = $y * $script:W
-        $line = New-Object 'char[]' $script:W
-        [Array]::Copy($script:Buf, $row, $line, 0, $script:W)
-        [void]$sb.Append([string]::new($line))
+        [void]$sb.Append((Get-RowText $y))
         [void]$sb.Append("`n")
     }
     Set-Content -Path $path -Value $sb.ToString() -Encoding ASCII
@@ -4413,9 +4501,7 @@ function Invoke-SelfTest {
     function Find-Label([string]$needle) {
         $fw = $script:W
         for ($fy = 0; $fy -lt $script:H; $fy++) {
-            $chars = New-Object 'char[]' $fw
-            [Array]::Copy($script:Buf, ($fy * $fw), $chars, 0, $fw)
-            $row = [string]::new($chars)
+            $row = Get-RowText $fy
             $fx = $row.IndexOf($needle)
             if ($fx -ge 0) {
                 $spot = New-Object 'int[]' 2
@@ -4435,6 +4521,21 @@ function Invoke-SelfTest {
     $script:InRoll = 0
     $script:InThrust = 0
     $script:InBrake = $false
+    $script:StickX = 128
+    $script:StickY = 128
+    $script:InPitch = 1
+    Update-FlightStick
+    $first = Get-StickAngle ([int]$script:StickY) 'pitch'
+    Check ([Math]::Abs($first) -lt 0.004) 'stick pitch starts gently'
+    for ($n = 0; $n -lt 24; $n++) { Update-FlightStick }
+    $built = Get-StickAngle ([int]$script:StickY) 'pitch'
+    Check ($built -gt $first) 'stick pitch builds while held'
+    $script:InPitch = 0
+    $held = [int]$script:StickY
+    Update-FlightStick
+    Check ([int]$script:StickY -lt $held) 'stick pitch eases back'
+    $script:StickX = 128
+    $script:StickY = 128
     $script:InFire = $false
     $oldSave = $script:SavePath
     $script:SavePath = Join-Path $env:TEMP 'elite-ps-selftest.json'
@@ -4501,28 +4602,34 @@ function Invoke-SelfTest {
     Check ($text.Contains('FU ')) 'hud fuel'
     Check ($text.Contains('SP ')) 'hud speed'
     Check ($text.Contains('+--')) 'cockpit corners'
-    $nBraille = 0
-    foreach ($ch in $script:Buf) {
-        $code = [int]$ch
-        if ($code -ge 0x2800 -and $code -le 0x28FF) { $nBraille++ }
+    $nFill = 0
+    foreach ($cp in $script:Buf) {
+        if ([EliteBraille.Raster]::IsFill([int]$cp)) { $nFill++ }
     }
-    Check ($nBraille -ge 10) "braille cells $nBraille"
+    Check ($nFill -ge 10) "octant cells $nFill"
     $hudDots = 0
     for ($y = $script:HudY; $y -lt $script:H; $y++) {
         $row = $y * $script:W
         for ($x = 0; $x -lt $script:W; $x++) {
-            $code = [int]$script:Buf[$row + $x]
-            if ($code -ge 0x2800 -and $code -le 0x28FF) { $hudDots++ }
+            if ([EliteBraille.Raster]::IsFill([int]$script:Buf[$row + $x])) { $hudDots++ }
         }
     }
     Check ($hudDots -ge 12) "scanner cells $hudDots"
     $sample = New-Object 'byte[]' 16
     [EliteBraille.Raster]::Plot($sample, 4, 4, 0, 0, 14)
     [EliteBraille.Raster]::Plot($sample, 4, 4, 1, 0, 14)
-    $sampleBuf = New-Object 'char[]' 2
+    $sampleBuf = New-Object 'int[]' 2
     $sampleCol = New-Object 'byte[]' 2
     [EliteBraille.Raster]::Stamp($sample, 4, $sampleBuf, $sampleCol, 2, 0, 1, $script:Pri)
-    Check (([int]$sampleBuf[0]) -eq (0x2800 + 0x09)) 'braille dot pattern'
+    Check ($sampleBuf[0] -eq 0x1FB82) 'octant top pair'
+    $left = New-Object 'byte[]' 16
+    [EliteBraille.Raster]::Plot($left, 4, 4, 0, 0, 14)
+    [EliteBraille.Raster]::Plot($left, 4, 4, 0, 1, 14)
+    [EliteBraille.Raster]::Plot($left, 4, 4, 0, 2, 14)
+    [EliteBraille.Raster]::Plot($left, 4, 4, 0, 3, 14)
+    $leftBuf = New-Object 'int[]' 2
+    [EliteBraille.Raster]::Stamp($left, 4, $leftBuf, $sampleCol, 2, 0, 1, $script:Pri)
+    Check ($leftBuf[0] -eq 0x258C) 'octant left half'
     Set-Identity $script:M
     $script:View = 1
     Sync-Camera
@@ -4564,13 +4671,14 @@ function Invoke-SelfTest {
         Clear-Frame
         Draw-ShowFrame $si $spin
         $got = 0
-        foreach ($ch in $script:Buf) {
-            $code = [int]$ch
-            if ($code -ge 0x2800 -and $code -le 0x28FF) { $got++ }
+        foreach ($cp in $script:Buf) {
+            if ([EliteBraille.Raster]::IsFill([int]$cp)) { $got++ }
         }
         if ($got -gt $wires) { $wires = $got }
         if ($si -eq 0) {
-            $page = -join $script:Buf
+            $pageSb = New-Object System.Text.StringBuilder
+            foreach ($cp in $script:Buf) { [EliteBraille.Raster]::Append($pageSb, [int]$cp) }
+            $page = $pageSb.ToString()
             Check ($page.Contains('PRESENTATION')) 'presentation title'
             Check ($page.Contains('Cobra Mk III')) 'presentation ship'
             Check ($page.Contains('David Braben')) 'presentation thanks'
@@ -4689,23 +4797,16 @@ function Invoke-SelfTest {
     Check ($script:FaceVis[4]) 'missile fin seen from the side'
     Check (-not $script:FaceVis[7]) 'missile top stays hidden from the side'
     Check (-not $script:FaceVis[8]) 'missile tail stays hidden from the side'
-    $mx = ($script:ViewTmp[5 * 3] + $script:ViewTmp[9 * 3]) / 2.0
-    $my = ($script:ViewTmp[5 * 3 + 1] + $script:ViewTmp[9 * 3 + 1]) / 2.0
-    $mz = ($script:ViewTmp[5 * 3 + 2] + $script:ViewTmp[9 * 3 + 2]) / 2.0
-    $sx = [int]($script:DX + ($mx / $mz) * $script:DotSX)
-    $sy = [int]($script:DY - ($my / $mz) * $script:DotSY)
+    $hx = ($script:ViewTmp[5 * 3] + $script:ViewTmp[9 * 3]) / 2.0
+    $hy = ($script:ViewTmp[5 * 3 + 1] + $script:ViewTmp[9 * 3 + 1]) / 2.0
+    $hz = ($script:ViewTmp[5 * 3 + 2] + $script:ViewTmp[9 * 3 + 2]) / 2.0
+    $hsx = [int]($script:DX + ($hx / $hz) * $script:DotSX)
+    $hsy = [int]($script:DY - ($hy / $hz) * $script:DotSY)
     $lit = $false
-    for ($oy = -2; $oy -le 2; $oy++) {
-        for ($ox = -2; $ox -le 2; $ox++) {
-            $px = $sx + $ox
-            $py = $sy + $oy
-            if ($px -lt 0 -or $py -lt 0 -or $px -ge $script:DW -or $py -ge $script:DH) { continue }
-            if ($script:Dots[$py * $script:DW + $px] -ne 0) { $lit = $true }
-        }
+    if ($hsx -ge 0 -and $hsy -ge 0 -and $hsx -lt $script:DW -and $hsy -lt $script:DH) {
+        $lit = ($script:Dots[$hsy * $script:DW + $hsx] -ne 0)
     }
-    Check $lit 'missile draws the rear fin edge from the side'
-    Ensure-Fins $script:MeshMissile
-    Check ($script:MeshMissile.Fins.Count -eq 4) "missile fins $($script:MeshMissile.Fins.Count)"
+    Check (-not $lit) 'missile hides the rear fin edge once its faces turn away'
     $script:Px = 0.0
     $script:Py = 0.0
     $script:Pz = 0.0

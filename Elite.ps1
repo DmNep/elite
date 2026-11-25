@@ -48,6 +48,10 @@ $script:ScanRange = 10240.0
 $script:ScanDots = $null
 $script:ScanBuf = $null
 $script:ScanCol = $null
+$script:HudDots = $null
+$script:Cond = 'GREEN'
+$script:CondCol = [byte]10
+$script:CondCritical = $false
 $script:ShowStars = $null
 $script:Heat = 0.0
 $script:Temp = 0.0
@@ -2326,9 +2330,13 @@ function Set-Frame([int]$w, [int]$h) {
     if ($h -lt 16) { $h = 16 }
     $script:W = $w
     $script:H = $h
-    $script:HudH = 11
-    if ($h -lt 28) { $script:HudH = 9 }
-    if ($h -lt 24) { $script:HudH = 6 }
+    $hud = [int][Math]::Ceiling((7.0 * $w) / 64.0)
+    if ($hud -lt 8) { $hud = 8 }
+    $maxHud = $h - 9
+    if ($maxHud -lt 6) { $maxHud = 6 }
+    if ($hud -gt $maxHud) { $hud = $maxHud }
+    if ($h -lt 24) { $hud = 6 }
+    $script:HudH = $hud
     $script:ViewY = 1
     $script:ViewH = $h - 1 - $script:HudH
     if ($script:ViewH -lt 6) { $script:ViewH = 6 }
@@ -3018,15 +3026,20 @@ function Draw-Blip([double]$wx, [double]$wy, [double]$wz) {
     World-To-Local $script:M ($wx - $script:Px) ($wy - $script:Py) ($wz - $script:Pz)
     $lx = $script:LocX; $ly = $script:LocY; $lz = $script:LocZ
     if ([Math]::Abs($lx) -gt $range -or [Math]::Abs($ly) -gt $range -or [Math]::Abs($lz) -gt $range) { return }
-    $bx = [int]([Math]::Round($script:ScCX + ($lx / $range) * $script:ScRX))
-    $by = [int]([Math]::Round($script:ScCY - ($lz / $range) * $script:ScRY))
-    $tip = [int]([Math]::Round($by - ($ly / $range) * $script:ScStick))
+    $xh = ($lx / $range) * 63.0
+    $yh = ($ly / $range) * 63.0
+    $zh = ($lz / $range) * 63.0
+    $bx = [int]([Math]::Round($script:ScCX + ($xh * $script:ScRX / 69.0)))
+    $by = [int]([Math]::Round($script:ScCY - (($zh / 4.0) * $script:ScRY / 18.0)))
+    $tip = [int]([Math]::Round($by - (($yh / 2.0) * $script:ScRY / 18.0)))
+    if ($bx -lt 1) { $bx = 1 }
+    if ($bx -gt ($script:ScDW - 3)) { $bx = $script:ScDW - 3 }
     if ($tip -lt 1) { $tip = 1 }
     if ($tip -gt ($script:ScDH - 2)) { $tip = $script:ScDH - 2 }
-    [EliteBraille.Raster]::Line($script:ScanDots, $script:ScDW, $script:ScDH, $bx, $by, $bx, $tip, 11)
+    $sx = $bx + 1
+    [EliteBraille.Raster]::Line($script:ScanDots, $script:ScDW, $script:ScDH, $sx, $by, $sx, $tip, 11)
     [EliteBraille.Raster]::Plot($script:ScanDots, $script:ScDW, $script:ScDH, $bx, $tip, 15)
-    [EliteBraille.Raster]::Plot($script:ScanDots, $script:ScDW, $script:ScDH, $bx + 1, $tip, 15)
-    [EliteBraille.Raster]::Plot($script:ScanDots, $script:ScDW, $script:ScDH, $bx, $tip + 1, 15)
+    [EliteBraille.Raster]::Plot($script:ScanDots, $script:ScDW, $script:ScDH, $sx, $tip, 15)
 }
 
 function Draw-Scanner([int]$ox, [int]$oy, [int]$cw, [int]$ch) {
@@ -3097,16 +3110,201 @@ function Draw-Scanner([int]$ox, [int]$oy, [int]$cw, [int]$ch) {
     }
 }
 
-function Draw-Dashboard {
-    $hy = $script:HudY
-    $hh = $script:HudH
-    $rule = '+' + ('-' * ($script:W - 2)) + '+'
-    Write-At 0 $hy $rule 6 $script:W
-    if ($hh -ge 2) { Write-At 0 ($hy + $hh - 1) $rule 6 $script:W }
-    $top = $hy + 1
-    $body = $hh - 2
-    if ($body -lt 1) { return }
+function Update-Condition {
+    $script:Cond = 'GREEN'
+    $script:CondCol = [byte]10
+    $nearHost = $false
+    foreach ($s in $script:Ships) {
+        if ($s.Role -eq 'trader') { continue }
+        if ((Speed-Of ($s.X - $script:Px) ($s.Y - $script:Py) ($s.Z - $script:Pz)) -lt 8000) { $nearHost = $true }
+    }
+    if ($nearHost) { $script:Cond = 'YELLOW'; $script:CondCol = [byte]11 }
+    if ($script:HitFlash -gt 0 -or $script:Witch) { $script:Cond = 'RED'; $script:CondCol = [byte]9 }
+    if (-not $script:Witch -and (Speed-Of $script:Px $script:Py $script:Pz) -lt 1700) { $script:Cond = 'GREEN'; $script:CondCol = [byte]10 }
+    $script:CondCritical = ($script:Hull -lt 28 -or $script:Energy -lt 20)
+    if ($script:CondCritical) { $script:Cond = 'RED'; $script:CondCol = [byte]9 }
+}
 
+function Dash-Line([double]$x0, [double]$y0, [double]$x1, [double]$y1, [byte]$c) {
+    $xa = [int]([Math]::Round($script:DashOX + ($x0 * $script:DashS)))
+    $ya = [int]([Math]::Round($script:DashOY + ($y0 * $script:DashS)))
+    $xb = [int]([Math]::Round($script:DashOX + ($x1 * $script:DashS)))
+    $yb = [int]([Math]::Round($script:DashOY + ($y1 * $script:DashS)))
+    [EliteBraille.Raster]::Line($script:HudDots, $script:DashDW, $script:DashDH, $xa, $ya, $xb, $yb, $c)
+}
+
+function Dash-Block([double]$x0, [double]$y0, [double]$x1, [double]$y1, [byte]$c) {
+    $xa = [int]([Math]::Floor($script:DashOX + ($x0 * $script:DashS)))
+    $ya = [int]([Math]::Floor($script:DashOY + ($y0 * $script:DashS)))
+    $xb = [int]([Math]::Ceiling($script:DashOX + ($x1 * $script:DashS)))
+    $yb = [int]([Math]::Ceiling($script:DashOY + ($y1 * $script:DashS)))
+    if ($xb -le $xa) { $xb = $xa + 1 }
+    if ($yb -le $ya) { $yb = $ya + 1 }
+    $dw = $script:DashDW
+    $dh = $script:DashDH
+    if ($xa -lt 0) { $xa = 0 }
+    if ($ya -lt 0) { $ya = 0 }
+    if ($xb -gt $dw) { $xb = $dw }
+    if ($yb -gt $dh) { $yb = $dh }
+    $dots = $script:HudDots
+    for ($yy = $ya; $yy -lt $yb; $yy++) {
+        $row = $yy * $dw
+        for ($xx = $xa; $xx -lt $xb; $xx++) { $dots[$row + $xx] = $c }
+    }
+}
+
+function Dash-Ring([double]$cx, [double]$cy, [double]$rx, [double]$ry, [byte]$c) {
+    $steps = 80
+    $px = $cx + $rx
+    $py = $cy
+    for ($i = 1; $i -le $steps; $i++) {
+        $a = $i * 6.2831853 / $steps
+        $x = $cx + ([Math]::Cos($a) * $rx)
+        $y = $cy + ([Math]::Sin($a) * $ry)
+        Dash-Line $px $py $x $y $c
+        $px = $x
+        $py = $y
+    }
+}
+
+function Dash-Units([double]$value, [double]$max, [int]$slots) {
+    $n = 0
+    if ($max -gt 0) { $n = [int]([Math]::Round($slots * $value / $max)) }
+    if ($n -lt 0) { $n = 0 }
+    if ($n -gt $slots) { $n = $slots }
+    return $n
+}
+
+function Dash-Level([double]$x, [double]$y, [int]$filled, [int]$cap, [int]$flipAt, [bool]$highIsDanger, [bool]$alwaysSafe) {
+    if ($filled -lt 0) { $filled = 0 }
+    if ($filled -gt $cap) { $filled = $cap }
+    $c = [byte]11
+    if (-not $alwaysSafe) {
+        if ($highIsDanger) {
+            if ($filled -ge $flipAt) { $c = [byte]9 }
+        }
+        elseif ($filled -gt 0 -and $filled -lt $flipAt) { $c = [byte]9 }
+    }
+    if ($filled -gt 0) { Dash-Block $x $y ($x + $filled) ($y + 3.0) $c }
+}
+
+function Dash-Tick([double]$x, [double]$y, [double]$dial) {
+    Dash-Block $x ($y + 1.0) ($x + 16.0) ($y + 2.0) 8
+    $t = $dial / 2.2
+    if ($t -gt 1.0) { $t = 1.0 }
+    if ($t -lt -1.0) { $t = -1.0 }
+    $pos = 8.0 + ($t * 7.0)
+    Dash-Block ($x + $pos) $y ($x + $pos + 1.2) ($y + 4.0) 15
+}
+
+function Dash-Blip([double]$wx, [double]$wy, [double]$wz, [byte]$color, [bool]$wide) {
+    $range = $script:ScanRange
+    if ($range -lt 1) { return }
+    World-To-Local $script:M ($wx - $script:Px) ($wy - $script:Py) ($wz - $script:Pz)
+    $lx = $script:LocX
+    $ly = $script:LocY
+    $lz = $script:LocZ
+    if ([Math]::Abs($lx) -gt $range -or [Math]::Abs($ly) -gt $range -or [Math]::Abs($lz) -gt $range) { return }
+    $xh = ($lx / $range) * 63.0
+    $yh = ($ly / $range) * 63.0
+    $zh = ($lz / $range) * 63.0
+    $x1 = 123.0 + $xh
+    if ($x1 -lt 60.0) { $x1 = 60.0 }
+    if ($x1 -gt 186.0) { $x1 = 186.0 }
+    $base = 28.0 - ($zh / 4.0)
+    $dot = $base - ($yh / 2.0)
+    if ($dot -lt 2.0) { $dot = 2.0 }
+    if ($dot -gt 54.0) { $dot = 54.0 }
+    Dash-Line ($x1 + 1.0) $base ($x1 + 1.0) $dot $color
+    if ($wide) { Dash-Block $x1 $dot ($x1 + 2.0) ($dot + 2.0) $color }
+    else { Dash-Block ($x1 + 1.0) $dot ($x1 + 2.0) ($dot + 1.0) $color }
+}
+
+function Write-DashAt([double]$dx, [double]$dy, [string]$text, [byte]$color) {
+    $px = $script:DashOX + ($dx * $script:DashS)
+    $py = $script:DashOY + ($dy * $script:DashS)
+    $cx = [int]([Math]::Floor($px / 2.0))
+    $cy = $script:HudY + [int]([Math]::Floor($py / 4.0))
+    Write-At $cx $cy $text $color $text.Length
+}
+
+function Write-DashBeside([double]$barX, [double]$dy, [string]$text, [byte]$color) {
+    $barPx = $script:DashOX + ($barX * $script:DashS)
+    $barCell = [int]([Math]::Floor($barPx / 2.0))
+    $py = $script:DashOY + ($dy * $script:DashS)
+    $cy = $script:HudY + [int]([Math]::Floor($py / 4.0))
+    $cx = $barCell - $text.Length
+    if ($cx -lt 0) { $cx = 0 }
+    Write-At $cx $cy $text $color $text.Length
+}
+
+function Draw-PixelDash {
+    if (-not ('EliteBraille.Raster' -as [type])) { return $false }
+    $dw = $script:W * 2
+    $dh = $script:HudH * 4
+    if ($dw -lt 16 -or $dh -lt 16) { return $false }
+    $need = $dw * $dh
+    if ($null -eq $script:HudDots -or $script:HudDots.Length -ne $need) {
+        $script:HudDots = New-Object 'byte[]' $need
+    }
+    else {
+        [Array]::Clear($script:HudDots, 0, $need)
+    }
+    $script:DashDW = $dw
+    $script:DashDH = $dh
+    $script:DashS = [Math]::Min($dw / 256.0, $dh / 56.0)
+    if ($script:DashS -lt 0.35) { return $false }
+    $script:DashOX = ($dw - (256.0 * $script:DashS)) / 2.0
+    $script:DashOY = ($dh - (56.0 * $script:DashS)) / 2.0
+    $edge = $script:CondCol
+    if ($script:CondCritical -and (($script:Tick % 8) -lt 4)) { $edge = [byte]8 }
+    $dots = $script:HudDots
+    for ($hx = 0; $hx -lt $dw; $hx++) { $dots[$hx] = $edge }
+    $last = ($dh - 1) * $dw
+    for ($hx = 0; $hx -lt $dw; $hx++) { $dots[$last + $hx] = 8 }
+
+    $barX = 16.0
+    Dash-Level $barX 2.0 (Dash-Units $script:ShieldF $script:ShieldMax 15) 16 3 $false $false
+    Dash-Level $barX 10.0 (Dash-Units $script:ShieldA $script:ShieldMax 15) 16 3 $false $false
+    Dash-Level $barX 18.0 (Dash-Units $script:Fuel 7.0 16) 16 14 $true $true
+    Dash-Level $barX 26.0 (Dash-Units $script:Temp 100.0 15) 16 11 $true $false
+    Dash-Level $barX 34.0 (Dash-Units $script:Heat 100.0 15) 16 11 $true $false
+    $alt = 0.0
+    if (-not $script:Witch) {
+        $pd = Speed-Of ($script:Px - $script:PlX) ($script:Py - $script:PlY) ($script:Pz - $script:PlZ)
+        $height = $pd - $script:PlR
+        if ($height -lt 0) { $height = 0 }
+        if ($height -lt 9000) { $alt = (1.0 - ($height / 9000.0)) * 100.0 }
+    }
+    Dash-Level $barX 42.0 (Dash-Units $alt 100.0 15) 16 14 $true $true
+
+    $mcol = [byte]10
+    if ($script:MissileArm -eq 1) { $mcol = [byte]11 }
+    elseif ($script:MissileArm -eq 2) { $mcol = [byte]9 }
+    for ($i = 0; $i -lt 4; $i++) {
+        $mx = 1.0 + ($i * 8.0)
+        if ($i -lt $script:Missiles) { Dash-Block $mx 47.0 ($mx + 6.0) 52.0 $mcol }
+    }
+
+    Dash-Ring 124.0 28.0 69.0 18.0 11
+    if ($script:DashS -ge 1.3) { Dash-Ring 124.0 28.0 67.6 17.3 11 }
+    Dash-Line 55.0 28.0 193.0 28.0 11
+    Dash-Line 124.0 10.0 124.0 46.0 11
+    if (-not $script:Witch) { Dash-Blip 0 0 0 14 $true }
+    foreach ($s in $script:Ships) {
+        if ($s.Hull -le 0) { continue }
+        $sc = [byte]$s.Color
+        if ($sc -eq 0) { $sc = [byte]11 }
+        Dash-Blip $s.X $s.Y $s.Z $sc $true
+    }
+    if ($null -ne $script:Bolts) {
+        foreach ($b in $script:Bolts) { Dash-Blip $b.X $b.Y $b.Z 11 $false }
+    }
+
+    $ccx = 186.0
+    $ccy = 13.0
+    $cr = 10.0
+    Dash-Ring $ccx $ccy $cr $cr 11
     $clx = 0.0
     $cly = 0.0
     $clz = 1.0
@@ -3117,20 +3315,89 @@ function Draw-Dashboard {
         $cly = $script:LocY
         $clz = $script:LocZ
         $cwhat = $script:CompassWhat
+        $dx = $clx * 8.0
+        $dy = -($cly * 8.0)
+        $lim = 6.5
+        if ($dx -gt $lim) { $dx = $lim }
+        if ($dx -lt -$lim) { $dx = -$lim }
+        if ($dy -gt $lim) { $dy = $lim }
+        if ($dy -lt -$lim) { $dy = -$lim }
+        if ($clz -ge 0) { Dash-Block ($ccx + $dx - 1.2) ($ccy + $dy - 1.2) ($ccx + $dx + 1.6) ($ccy + $dy + 1.6) 11 }
+        else { Dash-Block ($ccx + $dx - 1.2) ($ccy + $dy) ($ccx + $dx + 1.6) ($ccy + $dy + 0.8) 7 }
     }
+    $sCol = [byte]8
+    if ($cwhat -eq 'STN' -and -not $script:Witch) { $sCol = [byte]11 }
+    $eCol = [byte]8
+    if ($script:EcmT -gt 0) { $eCol = [byte]11 }
+    $lampOn = $true
+    if ($script:CondCritical -and (($script:Tick % 8) -lt 4)) { $lampOn = $false }
+    if ($lampOn) { Dash-Block 200.0 14.0 207.0 20.0 $script:CondCol }
+
     $sp = Speed-Of $script:Vx $script:Vy $script:Vz
-    $cond = 'GREEN'
-    $condCol = [byte]10
-    $nearHost = $false
-    foreach ($s in $script:Ships) {
-        if ($s.Role -eq 'trader') { continue }
-        if ((Speed-Of ($s.X - $script:Px) ($s.Y - $script:Py) ($s.Z - $script:Pz)) -lt 8000) { $nearHost = $true }
+    $shown = $sp / 640.0 * 40.0
+    if ($shown -gt 40.0) { $shown = 40.0 }
+    $spPix = [int]([Math]::Round($shown / 2.0))
+    if ($spPix -gt 16) { $spPix = 16 }
+    $rx = 222.0
+    Dash-Level $rx 2.0 $spPix 16 14 $true $false
+    Dash-Tick $rx 10.0 $script:DialRoll
+    Dash-Tick $rx 18.0 $script:DialPitch
+    for ($i = 0; $i -lt 4; $i++) {
+        $fromBottom = 3 - $i
+        $bank = $script:Energy - (25.0 * $fromBottom)
+        if ($bank -lt 0) { $bank = 0 }
+        if ($bank -gt 25) { $bank = 25 }
+        $slots = 16
+        if ($i -eq 0) { $slots = 15 }
+        $y = 24.0 + ($i * 8.0)
+        Dash-Level $rx $y (Dash-Units $bank 25.0 $slots) 16 3 $false $false
     }
-    if ($nearHost) { $cond = 'YELLOW'; $condCol = [byte]11 }
-    if ($script:HitFlash -gt 0 -or $script:Witch) { $cond = 'RED'; $condCol = [byte]9 }
-    if (-not $script:Witch -and (Speed-Of $script:Px $script:Py $script:Pz) -lt 1700) { $cond = 'GREEN'; $condCol = [byte]10 }
-    $critical = ($script:Hull -lt 28 -or $script:Energy -lt 20)
-    if ($critical) { $cond = 'RED'; $condCol = [byte]9 }
+
+    $mode = ''
+    $modeCol = [byte]11
+    if ($script:JumpT -gt 0) { $mode = 'J ' + [string]([int][Math]::Ceiling($script:JumpT)) }
+    elseif ($script:InTorus) { $mode = 'TORUS' }
+    elseif ($script:CloakOn) { $mode = 'CLOAK'; $modeCol = [byte]13 }
+    elseif ($script:AutoDock) { $mode = 'AUTO'; $modeCol = [byte]14 }
+    elseif ($script:View -ne 0) { $mode = $script:ViewName[$script:View]; $modeCol = [byte]6 }
+
+    [EliteBraille.Raster]::Stamp($script:HudDots, $dw, $script:Buf, $script:Col, $script:W, $script:HudY, $script:HudH, $script:Pri)
+    $leftX = 16.0
+    Write-DashBeside $leftX 1.0 'FS ' 11
+    Write-DashBeside $leftX 9.0 'AS ' 11
+    Write-DashBeside $leftX 17.0 'FU ' 11
+    Write-DashBeside $leftX 25.0 'CT ' 11
+    Write-DashBeside $leftX 33.0 'LT ' 11
+    Write-DashBeside $leftX 41.0 'AL ' 11
+    Write-DashBeside $rx 1.0 'SP ' 11
+    Write-DashBeside $rx 9.0 'RL ' 11
+    Write-DashBeside $rx 17.0 'DC ' 11
+    for ($i = 0; $i -lt 4; $i++) {
+        Write-DashBeside $rx (25.0 + ($i * 8.0)) ([string]($i + 1)) 11
+    }
+    Write-DashAt 200.0 4.0 'S' $sCol
+    Write-DashAt 210.0 4.0 'E' $eCol
+    if ($mode.Length -gt 0) { Write-DashAt 40.0 48.0 $mode $modeCol }
+    return $true
+}
+
+function Draw-Dashboard {
+    Update-Condition
+    if ($script:W -ge 64 -and $script:HudH -ge 8) {
+        if (Draw-PixelDash) { return }
+    }
+    $hy = $script:HudY
+    $hh = $script:HudH
+    $rule = '+' + ('-' * ($script:W - 2)) + '+'
+    Write-At 0 $hy $rule 6 $script:W
+    if ($hh -ge 2) { Write-At 0 ($hy + $hh - 1) $rule 6 $script:W }
+    $top = $hy + 1
+    $body = $hh - 2
+    if ($body -lt 1) { return }
+    $sp = Speed-Of $script:Vx $script:Vy $script:Vz
+    $cond = $script:Cond
+    $condCol = $script:CondCol
+    $critical = $script:CondCritical
     $alt = 0.0
     if (-not $script:Witch) {
         $pd = Speed-Of ($script:Px - $script:PlX) ($script:Py - $script:PlY) ($script:Pz - $script:PlZ)
@@ -3138,103 +3405,19 @@ function Draw-Dashboard {
         if ($height -lt 0) { $height = 0 }
         if ($height -lt 9000) { $alt = (1.0 - ($height / 9000.0)) * 100.0 }
     }
-    $rightW = 20
-    $rightX = $script:W - $rightW - 2
-    $full = ($body -ge 9 -and $rightX -ge 36)
-    if ($full) {
-        for ($i = 0; $i -lt $body; $i++) {
-            Write-At 0 ($top + $i) '|' 6 1
-            Write-At ($script:W - 1) ($top + $i) '|' 6 1
-        }
-        Write-Gauge 2 ($top + 0) 'FS' (Bar $script:ShieldF $script:ShieldMax 8)
-        Write-Gauge 2 ($top + 1) 'AS' (Bar $script:ShieldA $script:ShieldMax 8)
-        Write-Gauge 2 ($top + 2) 'FU' (Bar $script:Fuel 7 8)
-        Write-Gauge 2 ($top + 3) 'CT' (Bar $script:Temp 100 8)
-        Write-Gauge 2 ($top + 4) 'LT' (Bar $script:Heat 100 8)
-        Write-Gauge 2 ($top + 5) 'AL' (Bar $alt 100 8)
-        Write-At 2 ($top + 6) 'MS' 7 2
-        $mcol = [byte]11
-        if ($script:MissileArm -eq 1) { $mcol = [byte]10 }
-        elseif ($script:MissileArm -eq 2) { $mcol = [byte]9 }
-        for ($i = 0; $i -lt 4; $i++) {
-            if ($i -lt $script:Missiles) { Write-At (5 + $i * 2) ($top + 6) '#' $mcol 1 }
-            else { Write-At (5 + $i * 2) ($top + 6) '.' 8 1 }
-        }
-        $mode = $script:ViewName[$script:View]
-        $modeCol = [byte]6
-        if ($script:JumpT -gt 0) {
-            $mode = 'J ' + [string]([int][Math]::Ceiling($script:JumpT))
-            $modeCol = [byte]11
-        }
-        elseif ($script:InTorus) { $mode = 'TORUS'; $modeCol = [byte]11 }
-        elseif ($script:CloakOn) { $mode = 'CLOAK'; $modeCol = [byte]13 }
-        elseif ($script:AutoDock) { $mode = 'AUTO'; $modeCol = [byte]14 }
-        Write-At 2 ($top + 7) $mode $modeCol 8
-
-        $art = @(
-            ' .---. ',
-            '/     \',
-            '|     |',
-            '\     /',
-            " '---' "
-        )
-        for ($i = 0; $i -lt 5; $i++) { Write-At $rightX ($top + $i) $art[$i] 7 7 }
-        if (-not $script:Witch) {
-            $px = 3 + [int]([Math]::Round($clx * 2.0))
-            $py = 2 - [int]([Math]::Round($cly * 1.0))
-            if ($px -lt 1) { $px = 1 }
-            if ($px -gt 5) { $px = 5 }
-            if ($py -lt 1) { $py = 1 }
-            if ($py -gt 3) { $py = 3 }
-            $mark = '*'
-            $markCol = [byte]15
-            if ($clz -lt 0) { $mark = 'o'; $markCol = [byte]8 }
-            Write-At ($rightX + $px) ($top + $py) $mark $markCol 1
-        }
-        if ($cwhat -eq 'STN' -and -not $script:Witch) { Write-At ($rightX + 8) ($top + 2) 'S' 11 1 }
-        else { Write-At ($rightX + 8) ($top + 2) '.' 8 1 }
-        if ($script:EcmT -gt 0) { Write-At ($rightX + 8) ($top + 3) 'E' 11 1 }
-        else { Write-At ($rightX + 8) ($top + 3) '.' 8 1 }
-        $lamp = $true
-        if ($critical -and (($script:Tick % 8) -lt 4)) { $lamp = $false }
-        if ($lamp) { Write-At ($rightX + 8) $top $cond $condCol 6 }
-        Write-Gauge $rightX ($top + 5) 'SP' (Bar $sp 320 8)
-        Write-At $rightX ($top + 6) 'RL' 7 2
-        Write-At ($rightX + 3) ($top + 6) (Center-Bar ($script:DialRoll / 2.4)) 9 5
-        Write-At $rightX ($top + 7) 'DC' 7 2
-        Write-At ($rightX + 3) ($top + 7) (Center-Bar ($script:DialPitch / 2.4)) 9 5
-        $bx = $rightX
-        for ($i = 0; $i -lt 4; $i++) {
-            $bank = $script:Energy - (25.0 * $i)
-            if ($bank -lt 0) { $bank = 0 }
-            if ($bank -gt 25) { $bank = 25 }
-            Write-At $bx ($top + 8) ([string]($i + 1)) 7 1
-            Write-At ($bx + 1) ($top + 8) (Bar $bank 25 3) 9 3
-            $bx += 5
-        }
-        $scanL = 16
-        $scanR = $rightX - 2
-        $gap = $scanR - $scanL + 1
-        $cw = $gap
-        if ($cw -gt 46) { $cw = 46 }
-        $ox = $scanL + [int](($gap - $cw) / 2)
-        Draw-Scanner $ox $top $cw $body
+    Write-Gauge 1 $top 'FS' (Bar $script:ShieldF $script:ShieldMax 6)
+    Write-Gauge 12 $top 'AS' (Bar $script:ShieldA $script:ShieldMax 6)
+    if ($body -ge 2) {
+        Write-Gauge 1 ($top + 1) 'FU' (Bar $script:Fuel 7 6)
+        Write-Gauge 12 ($top + 1) 'SP' (Bar $sp 640 6)
     }
-    else {
-        Write-Gauge 1 $top 'FS' (Bar $script:ShieldF $script:ShieldMax 6)
-        Write-Gauge 12 $top 'AS' (Bar $script:ShieldA $script:ShieldMax 6)
-        if ($body -ge 2) {
-            Write-Gauge 1 ($top + 1) 'FU' (Bar $script:Fuel 7 6)
-            Write-Gauge 12 ($top + 1) 'SP' (Bar $sp 640 6)
-        }
-        if ($body -ge 3) {
-            Write-Gauge 1 ($top + 2) 'CT' (Bar $script:Temp 100 4)
-            Write-Gauge 10 ($top + 2) 'LT' (Bar $script:Heat 100 4)
-            Write-Gauge 19 ($top + 2) 'AL' (Bar $alt 100 4)
-            if (-not $critical -or (($script:Tick % 8) -ge 4)) { Write-At 28 ($top + 2) $cond $condCol 6 }
-        }
-        if ($body -ge 5) { Draw-Scanner 2 ($top + 3) ($script:W - 4) ($body - 3) }
+    if ($body -ge 3) {
+        Write-Gauge 1 ($top + 2) 'CT' (Bar $script:Temp 100 4)
+        Write-Gauge 10 ($top + 2) 'LT' (Bar $script:Heat 100 4)
+        Write-Gauge 19 ($top + 2) 'AL' (Bar $alt 100 4)
+        if (-not $critical -or (($script:Tick % 8) -ge 4)) { Write-At 28 ($top + 2) $cond $condCol 6 }
     }
+    if ($body -ge 5) { Draw-Scanner 2 ($top + 3) ($script:W - 4) ($body - 3) }
 }
 
 function Draw-Flight {
@@ -3288,7 +3471,9 @@ function Draw-Flight {
         Cam-Local $dx $dy $dz
         Draw-ViewLine 0 0 0.9 $script:LocX $script:LocY $script:LocZ '|' 14
     }
-    $border = [byte]6
+    Update-Condition
+    $border = $script:CondCol
+    if ($script:CondCritical -and (($script:Tick % 8) -lt 4)) { $border = [byte]8 }
     if ($script:HitFlash -gt 0) { $border = [byte]9 }
     Draw-Reticle $border
     Stamp-Braille
